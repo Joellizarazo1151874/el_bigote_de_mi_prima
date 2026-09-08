@@ -1,0 +1,2574 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>El Bigote de Mi Prima - Sistema Multi-Taller</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & React DOM CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Babel CDN -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Firebase CDN (Auth + Firestore). Los archivos NO se guardan en Firebase
+       Storage (pide plan Blaze) sino en un servidor Hostinger vía PHP. -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <!-- SheetJS: genera el archivo .xlsx de la descarga en Excel del Histórico -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    @media print {
+      body * { visibility: hidden; }
+      #printable-ticket, #printable-ticket * { visibility: visible; }
+      #printable-ticket { position: absolute; left: 0; top: 0; width: 100%; }
+    }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .toast-enter { animation: toastIn 0.2s ease-out; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen selection:bg-red-500 selection:text-white">
+  <div id="root"></div>
+
+  <script>
+    // =====================================================================
+    // ⚠️ CONFIGURACIÓN DE FIREBASE — REEMPLAZA ESTOS VALORES ⚠️
+    // Ve a la Consola de Firebase → Configuración del proyecto → tus apps →
+    // "SDK setup and configuration" → copia el objeto firebaseConfig y
+    // pégalo aquí abajo, reemplazando estos valores de ejemplo.
+    // =====================================================================
+    const firebaseConfig = {
+      apiKey: "AIzaSyCBmH4SyMPKV0f7GOI3XuJ6LUpocHtRRtM",
+      authDomain: "bigote-de-mi-prima.firebaseapp.com",
+      projectId: "bigote-de-mi-prima",
+      storageBucket: "bigote-de-mi-prima.firebasestorage.app",
+      messagingSenderId: "911139830265",
+      appId: "1:911139830265:web:b0f4b6b2b70c61732ba528"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // =====================================================================
+    // ⚠️ URL DE TU SERVIDOR HOSTINGER — REEMPLAZA ESTE VALOR ⚠️
+    // Es la dirección donde subiste la carpeta hostinger-uploads/ (ver esa
+    // carpeta en el proyecto para el script PHP y las instrucciones).
+    // =====================================================================
+    const HOSTINGER_UPLOAD_URL = "https://functionaltraining.site/hostinger-uploads/upload.php";
+    const HOSTINGER_CHUNK_URL = "https://functionaltraining.site/hostinger-uploads/upload-chunk.php";
+    const HOSTINGER_FINALIZE_URL = "https://functionaltraining.site/hostinger-uploads/upload-finalize.php";
+  </script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useContext, createContext, useCallback } = React;
+
+    // --- NOTIFICACIONES (reemplazan los alert() nativos del navegador) ---
+    const ToastContext = createContext(() => {});
+    const useToast = () => useContext(ToastContext);
+
+    const TOAST_STYLES = {
+      success: { icon: '✅', classes: 'bg-emerald-50 border-emerald-300 text-emerald-900' },
+      error: { icon: '⚠️', classes: 'bg-red-50 border-red-300 text-red-900' },
+      info: { icon: 'ℹ️', classes: 'bg-slate-50 border-slate-300 text-slate-900' },
+    };
+
+    function ToastProvider({ children }) {
+      const [toasts, setToasts] = useState([]);
+
+      const dismiss = useCallback((id) => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+      }, []);
+
+      const showToast = useCallback((message, type = 'info') => {
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => dismiss(id), 5000);
+      }, [dismiss]);
+
+      return (
+        <ToastContext.Provider value={showToast}>
+          {children}
+          <div className="fixed top-20 right-4 left-4 sm:left-auto z-[100] flex flex-col items-end gap-2 pointer-events-none">
+            {toasts.map(t => {
+              const style = TOAST_STYLES[t.type] || TOAST_STYLES.info;
+              return (
+                <div
+                  key={t.id}
+                  onClick={() => dismiss(t.id)}
+                  className={`toast-enter pointer-events-auto cursor-pointer w-full sm:w-96 max-w-full rounded-2xl border-2 shadow-lg p-4 flex items-start gap-3 ${style.classes}`}
+                >
+                  <span className="text-lg leading-none">{style.icon}</span>
+                  <p className="text-sm font-bold flex-1">{t.message}</p>
+                </div>
+              );
+            })}
+          </div>
+        </ToastContext.Provider>
+      );
+    }
+
+    // --- CONFIRMACIÓN (reemplaza window.confirm()) ---
+    const ConfirmContext = createContext(() => Promise.resolve(false));
+    const useConfirm = () => useContext(ConfirmContext);
+
+    function ConfirmProvider({ children }) {
+      const [request, setRequest] = useState(null);
+
+      const askConfirm = useCallback((message) => new Promise((resolve) => {
+        setRequest({ message, resolve });
+      }), []);
+
+      const answer = (value) => {
+        request.resolve(value);
+        setRequest(null);
+      };
+
+      return (
+        <ConfirmContext.Provider value={askConfirm}>
+          {children}
+          {request && (
+            <div className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="toast-enter bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4">
+                <div className="flex items-center gap-2 text-red-600">
+                  <span className="text-2xl">⚠️</span>
+                  <h3 className="font-black text-slate-900 text-sm uppercase tracking-wide">Confirmar acción</h3>
+                </div>
+                <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{request.message}</p>
+                <div className="flex gap-3 pt-2">
+                  <button onClick={() => answer(false)} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-2xl text-sm transition-all">Cancelar</button>
+                  <button onClick={() => answer(true)} className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl text-sm transition-all">Sí, continuar</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </ConfirmContext.Provider>
+      );
+    }
+
+    // --- USUARIO -> CORREO INTERNO PARA FIREBASE AUTH ---
+    // Los empleados solo ven/escriben un "usuario" simple, nunca un correo real.
+    // Por debajo, Firebase Authentication exige un correo, así que lo simulamos.
+    const usernameToEmail = (username) => `${username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')}@bigote.local`;
+
+    // --- SUBIDA DE ARCHIVOS AL SERVIDOR HOSTINGER (no usamos Firebase Storage) ---
+    // Envía el ID token de Firebase Auth para que hostinger-uploads/*.php pueda
+    // verificar, contra la API de Google, que quien sube el archivo sí inició
+    // sesión de verdad antes de guardarlo en el servidor.
+    //
+    // Los archivos grandes se dividen en pedazos y se suben varios A LA VEZ
+    // (en vez de uno solo por HTTP): en este hosting compartido cada conexión
+    // individual tiene un límite de velocidad, así que varias conexiones en
+    // paralelo consiguen más rendimiento real (medido ~2x con 3-4 en paralelo).
+    // Además, si una conexión falla a mitad de camino solo se reintenta ese
+    // pedazo, no el archivo completo.
+    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB por pedazo
+    const CHUNK_THRESHOLD = 8 * 1024 * 1024; // archivos más grandes se suben por pedazos
+    const CHUNK_CONCURRENCY = 4; // pedazos subiendo al mismo tiempo
+
+    // XMLHttpRequest (no fetch) porque es lo único que da eventos de progreso
+    // de SUBIDA en el navegador.
+    const xhrPostFormData = (url, formData, onProgress) => new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.upload.onprogress = (e) => {
+        if (onProgress && e.lengthComputable) onProgress(e.loaded, e.total);
+      };
+      xhr.onload = () => {
+        let data = {};
+        try { data = JSON.parse(xhr.responseText); } catch (e) {}
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+        else reject(new Error(data.error || `Error del servidor (${xhr.status})`));
+      };
+      xhr.onerror = () => reject(new Error('Error de red al subir el archivo'));
+      xhr.send(formData);
+    });
+
+    const withRetry = async (fn, attempts = 3, delayMs = 1200) => {
+      let lastErr;
+      for (let i = 0; i < attempts; i++) {
+        try { return await fn(); } catch (e) {
+          lastErr = e;
+          if (i < attempts - 1) await new Promise(r => setTimeout(r, delayMs * (i + 1)));
+        }
+      }
+      throw lastErr;
+    };
+
+    // Corre "workers" leyendo de la misma cola, con un máximo de `limit` a la vez.
+    const runWithConcurrency = async (items, limit, worker) => {
+      const results = new Array(items.length);
+      let nextIndex = 0;
+      const runners = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+        while (nextIndex < items.length) {
+          const current = nextIndex++;
+          results[current] = await worker(items[current], current);
+        }
+      });
+      await Promise.all(runners);
+      return results;
+    };
+
+    const uploadSmallFile = (file, comandaId, onProgress) => withRetry(async () => {
+      const idToken = await auth.currentUser.getIdToken();
+      const formData = new FormData();
+      formData.append('idToken', idToken);
+      formData.append('comandaId', comandaId);
+      formData.append('file', file);
+      return xhrPostFormData(HOSTINGER_UPLOAD_URL, formData, onProgress);
+    });
+
+    // Divide el archivo en pedazos de CHUNK_SIZE, sube varios en paralelo
+    // (con reintento individual por pedazo), y al final pide al servidor que
+    // los ensamble (upload-finalize.php).
+    const uploadLargeFileChunked = async (file, comandaId, onProgress) => {
+      const idToken = await auth.currentUser.getIdToken();
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      const uploadId = (window.crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/-/g, '');
+      const chunkLoaded = new Array(totalChunks).fill(0);
+
+      const reportProgress = () => {
+        if (onProgress) onProgress(chunkLoaded.reduce((a, b) => a + b, 0), file.size);
+      };
+
+      const chunkIndexes = Array.from({ length: totalChunks }, (_, i) => i);
+
+      await runWithConcurrency(chunkIndexes, CHUNK_CONCURRENCY, (chunkIndex) => withRetry(async () => {
+        const start = chunkIndex * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const formData = new FormData();
+        formData.append('idToken', idToken);
+        formData.append('comandaId', comandaId);
+        formData.append('uploadId', uploadId);
+        formData.append('chunkIndex', String(chunkIndex));
+        formData.append('totalChunks', String(totalChunks));
+        formData.append('chunk', file.slice(start, end), `${chunkIndex}.part`);
+
+        chunkLoaded[chunkIndex] = 0;
+        await xhrPostFormData(HOSTINGER_CHUNK_URL, formData, (loaded) => {
+          chunkLoaded[chunkIndex] = loaded;
+          reportProgress();
+        });
+        chunkLoaded[chunkIndex] = end - start;
+        reportProgress();
+      }));
+
+      const finalizeForm = new FormData();
+      finalizeForm.append('idToken', idToken);
+      finalizeForm.append('comandaId', comandaId);
+      finalizeForm.append('uploadId', uploadId);
+      finalizeForm.append('totalChunks', String(totalChunks));
+      finalizeForm.append('originalName', file.name);
+      finalizeForm.append('totalSize', String(file.size));
+
+      return withRetry(() => xhrPostFormData(HOSTINGER_FINALIZE_URL, finalizeForm));
+    };
+
+    const uploadFileToHostinger = (file, comandaId, onProgress) => file.size > CHUNK_THRESHOLD
+      ? uploadLargeFileChunked(file, comandaId, onProgress)
+      : uploadSmallFile(file, comandaId, onProgress);
+
+    // Sube varios archivos (cada uno por su cuenta, con o sin pedazos según su
+    // tamaño) y combina el progreso de todos en un solo % para la barra de avance.
+    const uploadFilesToHostinger = (files, comandaId, onOverallProgress) => {
+      const fileList = Array.from(files);
+      const loadedPerFile = new Array(fileList.length).fill(0);
+      const totalBytes = fileList.reduce((sum, f) => sum + f.size, 0);
+
+      const reportOverall = () => {
+        if (onOverallProgress) onOverallProgress(loadedPerFile.reduce((a, b) => a + b, 0), totalBytes);
+      };
+
+      return Promise.all(fileList.map((f, i) => uploadFileToHostinger(f, comandaId, (loaded) => {
+        loadedPerFile[i] = loaded;
+        reportOverall();
+      })));
+    };
+
+    // Normaliza los archivos adjuntos de una comanda: soporta el arreglo nuevo
+    // (order.files) y, para comandas viejas, el campo único fileURL/fileName.
+    const getOrderFiles = (order) => {
+      if (Array.isArray(order.files) && order.files.length > 0) return order.files;
+      if (order.fileURL) return [{ url: order.fileURL, name: order.fileName, size: order.fileSize }];
+      return [];
+    };
+
+    // --- COMPONENTE DEL LOGO OFICIAL ---
+    const BrandLogo = ({ variant = 'full', className = '' }) => {
+      const [imgError, setImgError] = useState(false);
+
+      if (!imgError) {
+        return (
+          <img
+            src="logo.jpg"
+            alt="El Bigote de Mi Prima"
+            onError={() => setImgError(true)}
+            className={variant === 'header' ? 'h-10 w-auto object-contain' : 'h-32 w-auto object-contain mx-auto drop-shadow-sm'}
+          />
+        );
+      }
+
+      if (variant === 'header') {
+        return (
+          <div className="flex items-center gap-2 select-none">
+            <svg className="w-9 h-8" viewBox="0 0 200 130" fill="none">
+              <path d="M20 60 C 40 25, 80 25, 100 45 C 120 25, 160 25, 180 60 C 190 90, 140 115, 100 115 C 60 115, 10 90, 20 60 Z" fill="#DC2626" />
+              <path d="M25 62 Q 100 78 175 62 Q 100 100 25 62 Z" fill="#991B1B" />
+              <path d="M90 38 Q 110 38 125 45 Q 110 42 90 38 Z" fill="#FFFFFF" opacity="0.8" />
+              <path d="M5 52 C 25 15, 70 12, 100 32 C 130 12, 175 15, 195 52 C 170 35, 130 35, 100 42 C 70 35, 30 35, 5 52 Z" fill="#0F172A" />
+            </svg>
+            <div className="leading-none text-left font-black">
+              <div className="text-xs font-black tracking-widest text-slate-900 flex items-center gap-1">
+                <span className="text-[9px] text-red-600 font-extrabold uppercase [writing-mode:vertical-lr] rotate-180">EL</span>
+                <span>BIGOT<span className="inline-block transform scale-x-[-1]">E</span></span>
+              </div>
+              <div className="text-base font-black text-red-600 tracking-tight">PRIMA <span className="text-[8px] border border-red-600 rounded-full px-0.5">R</span></div>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className={`flex flex-col items-center select-none ${className}`}>
+          <svg className="w-48 h-auto drop-shadow-sm" viewBox="0 0 200 130" fill="none">
+            <path d="M20 60 C 40 25, 80 25, 100 45 C 120 25, 160 25, 180 60 C 190 90, 140 115, 100 115 C 60 115, 10 90, 20 60 Z" fill="#DC2626" />
+            <path d="M25 62 Q 100 78 175 62 Q 100 100 25 62 Z" fill="#991B1B" />
+            <path d="M90 38 Q 110 38 125 45 Q 110 42 90 38 Z" fill="#FFFFFF" opacity="0.8" />
+            <path d="M5 52 C 25 15, 70 12, 100 32 C 130 12, 175 15, 195 52 C 170 35, 130 35, 100 42 C 70 35, 30 35, 5 52 Z" fill="#0F172A" />
+          </svg>
+
+          <div className="text-center font-black tracking-tight leading-none text-slate-900 mt-2">
+            <div className="flex items-center justify-center gap-1">
+              <span className="text-[10px] font-extrabold uppercase [writing-mode:vertical-lr] rotate-180 text-red-600">EL</span>
+              <span className="text-3xl font-black tracking-widest text-slate-900">BIGOT<span className="inline-block transform scale-x-[-1]">E</span></span>
+              <div className="flex flex-col text-[9px] font-black leading-tight text-red-600 text-left">
+                <span>D<span className="inline-block transform scale-x-[-1]">E</span></span>
+                <span>MI</span>
+              </div>
+            </div>
+            <div className="text-4xl font-black tracking-tighter text-red-600 flex items-center justify-center gap-1 mt-0.5">
+              <span>PRIMA</span>
+              <span className="text-[10px] font-bold border border-red-600 rounded-full w-4 h-4 flex items-center justify-center -mt-3 text-red-600">R</span>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // --- ICONOS SVG ---
+    const IconPrinter = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
+    const IconPlus = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+    const IconLogOut = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+    const IconGrid = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
+    const IconUsers = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+    const IconCalendar = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+    const IconArrowRight = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>;
+    const IconX = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+    const IconTrash = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
+    const IconLock = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+    const IconCheckCircle = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
+    const IconRefreshCw = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>;
+    const IconSpinner = ({ className = 'w-5 h-5' }) => <svg className={`${className} animate-spin`} fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>;
+
+    // BADGE DE PRIORIDAD (TITILEO PARPADEANTE EN URGENTE)
+    const getPriorityBadgeClass = (priority) => {
+      if (priority === 'Urgente') {
+        return 'bg-red-600 text-white border-red-700 animate-pulse font-black shadow-md shadow-red-500/30 ring-2 ring-red-400 uppercase tracking-wider';
+      }
+      if (priority === 'Alta') {
+        return 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
+      }
+      if (priority === 'Baja') {
+        return 'bg-slate-100 text-slate-600 border-slate-300';
+      }
+      return 'bg-slate-100 text-slate-800 border-slate-300';
+    };
+
+    const WORKSHOP_TYPES = {
+      IMPRESION: { label: 'Taller Impresión Digital', icon: '🖨️', badgeColor: 'bg-blue-100 text-blue-900 border-blue-300' },
+      LASER: { label: 'Taller Corte Láser & Acrílico', icon: '⚡', badgeColor: 'bg-purple-100 text-purple-900 border-purple-300' },
+      AMBOS: { label: 'Trabajo Mixto (Ambos Talleres)', icon: '🔀', badgeColor: 'bg-amber-100 text-amber-900 border-amber-300' },
+      EXTERNO: { label: 'Trabajo Externo / Por Fuera', icon: '🏢', badgeColor: 'bg-slate-800 text-white border-slate-900' }
+    };
+
+    const BASE_MATERIALS_LIST = [
+      'Lona',
+      'Panaflex',
+      'Microperforado',
+      'Vinilo Blanco',
+      'Vinilo Transparente',
+      'Vinilo de Corte',
+      'Esmerilado',
+      'PVC',
+      'Acrílico'
+    ];
+
+    const NO_FINISH_MATERIALS = ['Microperforado', 'Esmerilado', 'PVC', 'Acrílico'];
+
+    const STATUS_FLOW = {
+      EN_ESPERA: { label: '1. En Espera de Recibir', next: 'EN_PRODUCCION', nextLabel: '📥 Aceptar en Producción', color: 'bg-amber-50 text-amber-900 border-amber-300' },
+      EN_PRODUCCION: { label: '2. En Producción', next: 'LISTO', nextLabel: '✅ Marcar como Listo / Finalizar', color: 'bg-blue-50 text-blue-900 border-blue-300' },
+      LISTO: { label: '3. Listo / Terminado', color: 'bg-emerald-50 text-emerald-900 border-emerald-300' }
+    };
+
+    const PAYMENT_STATUS_OPTIONS = {
+      PENDIENTE: { label: '⏳ Pendiente', class: 'bg-amber-100 text-amber-900 border-amber-300' },
+      PAGO: { label: '✅ PAGO', class: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
+      FACTURADO_SIN_PAGO: { label: '📄 Facturado Sin Pago', class: 'bg-purple-100 text-purple-900 border-purple-300' },
+      TABULACION_INTERNA: { label: '📋 Tabulación Interna', class: 'bg-blue-100 text-blue-900 border-blue-300' }
+    };
+
+    const formatCurrency = val => {
+      if (!val || isNaN(val)) return '$0';
+      return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(val);
+    };
+
+    const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100MB (debe coincidir con storage.rules)
+
+    const playChimeSound = () => {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const playTone = (freq, delay) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+          gain.gain.setValueAtTime(0.2, ctx.currentTime + delay);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.5);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + delay);
+          osc.stop(ctx.currentTime + delay + 0.5);
+        };
+        playTone(587.33, 0);
+        playTone(880.0, 0.15);
+      } catch (e) {}
+    };
+
+    // --- COMPONENTE PRINCIPAL ---
+    function App() {
+      const toast = useToast();
+      const askConfirm = useConfirm();
+      const [authLoading, setAuthLoading] = useState(true);
+      const [currentUser, setCurrentUser] = useState(null);
+      const [users, setUsers] = useState([]);
+      const [orders, setOrders] = useState([]);
+
+      const [loginUsername, setLoginUsername] = useState('');
+      const [loginPassword, setLoginPassword] = useState('');
+      const [authError, setAuthError] = useState('');
+      const [loggingIn, setLoggingIn] = useState(false);
+
+      const [activeTab, setActiveTab] = useState('KANBAN');
+      const [selectedWorkshopFilter, setSelectedWorkshopFilter] = useState('TODOS');
+      const [searchTerm, setSearchTerm] = useState('');
+      const [ticketModalOrder, setTicketModalOrder] = useState(null);
+      const [materialReportModal, setMaterialReportModal] = useState(null);
+      const [showCompletedWorkshopSection, setShowCompletedWorkshopSection] = useState(false);
+      const [visibleListoCount, setVisibleListoCount] = useState(10);
+
+      // Si cambian los filtros, la paginación de "Listo/Terminado" vuelve a empezar en 10.
+      useEffect(() => { setVisibleListoCount(10); }, [searchTerm, selectedWorkshopFilter]);
+
+      // --- SESIÓN: Firebase Auth mantiene el login entre recargas ---
+      useEffect(() => {
+        const unsubscribe = auth.onAuthStateChanged(async (fbUser) => {
+          if (!fbUser) {
+            setCurrentUser(null);
+            setAuthLoading(false);
+            return;
+          }
+          try {
+            const profileSnap = await db.collection('usuarios').doc(fbUser.uid).get();
+            if (!profileSnap.exists || profileSnap.data().disabled) {
+              await auth.signOut();
+              setCurrentUser(null);
+              setAuthError(profileSnap.exists ? 'Tu usuario fue deshabilitado. Contacta al administrador.' : 'Tu perfil no existe. Contacta al administrador.');
+            } else {
+              const profile = profileSnap.data();
+              setCurrentUser({ uid: fbUser.uid, ...profile });
+              if (profile.role === 'DISENO') setActiveTab('CREAR');
+              else if (profile.role === 'TALLER') {
+                setActiveTab('TALLER');
+                if (profile.workshopArea) setSelectedWorkshopFilter(profile.workshopArea);
+              } else setActiveTab('KANBAN');
+            }
+          } catch (e) {
+            console.error('Error cargando perfil de usuario:', e);
+            setAuthError('No se pudo cargar tu perfil. Intenta de nuevo.');
+          }
+          setAuthLoading(false);
+        });
+        return unsubscribe;
+      }, []);
+
+      // --- USUARIOS (para el panel de administración y el filtro de diseñador en histórico) ---
+      useEffect(() => {
+        if (!currentUser) { setUsers([]); return; }
+        const unsub = db.collection('usuarios').onSnapshot(
+          snap => setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() }))),
+          err => console.error('Error leyendo usuarios:', err)
+        );
+        return unsub;
+      }, [currentUser?.uid]);
+
+      // --- COMANDAS EN TIEMPO REAL ---
+      // La visibilidad real (qué taller ve qué) se aplica aquí, en la consulta,
+      // y queda reforzada por las Reglas de Seguridad de Firestore (firestore.rules).
+      useEffect(() => {
+        if (!currentUser) { setOrders([]); return; }
+        let query = db.collection('comandas').orderBy('timestamp', 'desc');
+        if (currentUser.role === 'TALLER' && currentUser.workshopArea !== 'AMBOS') {
+          query = query.where('targetWorkshop', 'in', [currentUser.workshopArea, 'AMBOS']);
+        } else if (currentUser.role !== 'MASTER') {
+          // DISEÑO, o TALLER con acceso a Ambos talleres: ven todas las comandas
+          // excepto los "Trabajos Externos", que son solo para supervisión MASTER.
+          query = query.where('targetWorkshop', '!=', 'EXTERNO');
+        }
+        // Suena un aviso en el taller cuando llega una comanda nueva (no en la
+        // carga inicial, solo en comandas que aparecen mientras la pestaña está abierta).
+        let isFirstSnapshot = true;
+        const unsub = query.onSnapshot(
+          snap => {
+            if (!isFirstSnapshot && currentUser.role === 'TALLER') {
+              const hasNewOrder = snap.docChanges().some(change => change.type === 'added');
+              if (hasNewOrder) playChimeSound();
+            }
+            isFirstSnapshot = false;
+            setOrders(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
+          },
+          err => console.error('Error leyendo comandas:', err)
+        );
+        return unsub;
+      }, [currentUser?.uid, currentUser?.role, currentUser?.workshopArea]);
+
+      const handleLogin = async (e) => {
+        e.preventDefault();
+        setAuthError('');
+        if (!loginUsername.trim() || !loginPassword) {
+          setAuthError('Ingresa tu usuario y contraseña.');
+          return;
+        }
+        setLoggingIn(true);
+        try {
+          await auth.signInWithEmailAndPassword(usernameToEmail(loginUsername), loginPassword);
+          setLoginPassword('');
+        } catch (err) {
+          setAuthError('Usuario o contraseña incorrectos.');
+        }
+        setLoggingIn(false);
+      };
+
+      const handleLogout = () => {
+        auth.signOut();
+        setLoginUsername('');
+        setLoginPassword('');
+      };
+
+      const handleAdvanceStatus = async (docId, targetAreaOverride = null) => {
+        const order = orders.find(o => o.docId === docId);
+        if (!order) return;
+
+        // Trabajo "Ambos Talleres": cada taller avanza SU PROPIO estado por
+        // separado (que uno acepte/termine no afecta al otro).
+        if (order.targetWorkshop === 'AMBOS') {
+          const activeArea = targetAreaOverride || (currentUser.workshopArea === 'LASER' ? 'LASER' : 'IMPRESION');
+          let newStImp = order.statusImpresion || 'EN_ESPERA';
+          let newStLas = order.statusLaser || 'EN_ESPERA';
+          let accImp = order.acceptedByImpresion || null;
+          let compImp = order.completedByImpresion || null;
+          let accLas = order.acceptedByLaser || null;
+          let compLas = order.completedByLaser || null;
+
+          if (activeArea === 'IMPRESION') {
+            if (newStImp === 'EN_ESPERA') { newStImp = 'EN_PRODUCCION'; accImp = currentUser.name; }
+            else if (newStImp === 'EN_PRODUCCION') { newStImp = 'LISTO'; compImp = currentUser.name; }
+          } else if (activeArea === 'LASER') {
+            if (newStLas === 'EN_ESPERA') { newStLas = 'EN_PRODUCCION'; accLas = currentUser.name; }
+            else if (newStLas === 'EN_PRODUCCION') { newStLas = 'LISTO'; compLas = currentUser.name; }
+          }
+
+          let globalSt = 'EN_PRODUCCION';
+          if (newStImp === 'LISTO' && newStLas === 'LISTO') globalSt = 'LISTO';
+          else if (newStImp === 'EN_ESPERA' && newStLas === 'EN_ESPERA') globalSt = 'EN_ESPERA';
+
+          try {
+            await db.collection('comandas').doc(docId).update({
+              statusImpresion: newStImp,
+              statusLaser: newStLas,
+              acceptedByImpresion: accImp,
+              completedByImpresion: compImp,
+              acceptedByLaser: accLas,
+              completedByLaser: compLas,
+              status: globalSt
+            });
+          } catch (e) {
+            toast('No se pudo actualizar la comanda: ' + e.message, 'error');
+          }
+          return;
+        }
+
+        const update = order.status === 'EN_ESPERA'
+          ? { status: 'EN_PRODUCCION', acceptedBy: currentUser.name }
+          : order.status === 'EN_PRODUCCION'
+            ? { status: 'LISTO', completedBy: currentUser.name }
+            : null;
+        if (!update) return;
+        try {
+          await db.collection('comandas').doc(docId).update(update);
+        } catch (e) {
+          toast('No se pudo actualizar la comanda: ' + e.message, 'error');
+        }
+      };
+
+      // FUNCIÓN DE BORRADO DE COMANDAS (EXCLUSIVO MASTER)
+      const handleDeleteOrder = async (docId, folio) => {
+        if (currentUser?.role !== 'MASTER') {
+          return toast('Acceso denegado: Solo los usuarios con permisos MASTER pueden eliminar comandas.', 'error');
+        }
+        const confirmed = await askConfirm(`¿Estás seguro de ELIMINAR definitivamente la comanda ${folio}?\n\nEsta acción borrará el registro de forma permanente.`);
+        if (confirmed) {
+          try {
+            await db.collection('comandas').doc(docId).delete();
+            toast(`Comanda ${folio} eliminada.`, 'success');
+          } catch (e) {
+            toast('No se pudo eliminar la comanda: ' + e.message, 'error');
+          }
+        }
+      };
+
+      const handleUpdatePaymentStatus = async (docId, newPaymentStatus) => {
+        try {
+          await db.collection('comandas').doc(docId).update({ paymentStatus: newPaymentStatus });
+        } catch (e) {
+          toast('No se pudo actualizar el estado de pago: ' + e.message, 'error');
+        }
+      };
+
+      const handleSaveMaterialReport = async (docId, reportText, reportImgUrl, type) => {
+        try {
+          const textField = type === 'IMPRESION' ? 'printMaterialReportText' : 'laserMaterialReportText';
+          const imgField = type === 'IMPRESION' ? 'printMaterialReportImg' : 'laserMaterialReportImg';
+          await db.collection('comandas').doc(docId).update({ [textField]: reportText, [imgField]: reportImgUrl });
+          toast('Reporte de consumo guardado.', 'success');
+        } catch (e) {
+          toast('No se pudo guardar el reporte de consumo: ' + e.message, 'error');
+        }
+      };
+
+      const handleSaveNewOrder = async (newOrderData, files, shouldPrint = false, onUploadProgress) => {
+        const counterRef = db.collection('contadores').doc('comandaSeq');
+        const newDocRef = db.collection('comandas').doc();
+
+        const nextSeq = await db.runTransaction(async (tx) => {
+          const snap = await tx.get(counterRef);
+          const current = snap.exists ? snap.data().value : 1089;
+          const next = current + 1;
+          tx.set(counterRef, { value: next });
+          return next;
+        });
+        const folioLabel = `#CMD-${nextSeq}`;
+        const isExternal = newOrderData.targetWorkshop === 'EXTERNO';
+        const isMixedNew = newOrderData.targetWorkshop === 'AMBOS';
+
+        let uploadedFiles = [];
+        if (files && files.length > 0) {
+          uploadedFiles = await uploadFilesToHostinger(files, newDocRef.id, onUploadProgress);
+        }
+
+        const created = {
+          ...newOrderData,
+          id: folioLabel,
+          createdAt: new Date().toLocaleString('es-CO'),
+          timestamp: Date.now(),
+          designerName: currentUser.name,
+          createdByUid: currentUser.uid,
+          acceptedBy: isExternal ? 'Trabajo Externo' : null,
+          completedBy: isExternal ? 'Trabajo Externo' : null,
+          status: isExternal ? 'LISTO' : 'EN_ESPERA',
+          // "Ambos Talleres": cada lado arranca y avanza por separado.
+          statusImpresion: isMixedNew ? 'EN_ESPERA' : null,
+          statusLaser: isMixedNew ? 'EN_ESPERA' : null,
+          acceptedByImpresion: null,
+          completedByImpresion: null,
+          acceptedByLaser: null,
+          completedByLaser: null,
+          paymentStatus: 'PENDIENTE',
+          files: uploadedFiles
+        };
+
+        await newDocRef.set(created);
+        playChimeSound();
+
+        if (shouldPrint) setTicketModalOrder({ ...created, docId: newDocRef.id });
+
+        if (isExternal) {
+          toast(`Comanda ${folioLabel} registrada como Trabajo Externo (directo al Histórico, no pasa por taller).`, 'success');
+          setActiveTab(currentUser.role === 'MASTER' ? 'HISTORIAL' : 'CREAR');
+        } else {
+          if (!shouldPrint) toast(`Comanda ${folioLabel} enviada correctamente al taller.`, 'success');
+          setActiveTab(currentUser.role === 'TALLER' ? 'TALLER' : 'KANBAN');
+        }
+      };
+
+      // Alta de usuario SIN cerrar la sesión del MASTER (app secundaria de Firebase, ver plan)
+      const handleCreateUser = async (newUserForm) => {
+        // App secundaria DESECHABLE (nombre único por creación): evita que dos
+        // altas de usuario seguidas muy rápido interfieran entre sí y, sobre
+        // todo, evita tocar la sesión del MASTER que está creando el usuario.
+        const secondaryApp = firebase.initializeApp(firebaseConfig, `Secondary-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+        try {
+          const secondaryAuth = secondaryApp.auth();
+          const email = usernameToEmail(newUserForm.username);
+          const cred = await secondaryAuth.createUserWithEmailAndPassword(email, newUserForm.password);
+          await db.collection('usuarios').doc(cred.user.uid).set({
+            username: newUserForm.username.trim().toLowerCase(),
+            name: newUserForm.name,
+            role: newUserForm.role,
+            workshopArea: newUserForm.workshopArea,
+            title: newUserForm.title,
+            avatar: newUserForm.avatar,
+            disabled: false
+          });
+        } finally {
+          await secondaryApp.delete();
+        }
+      };
+
+      // No se borra la cuenta de verdad (requeriría privilegios de servidor); se deshabilita el acceso.
+      const handleToggleUserDisabled = async (uid, disabled) => {
+        await db.collection('usuarios').doc(uid).update({ disabled });
+      };
+
+      // --- PANTALLA DE CARGA INICIAL ---
+      if (authLoading) {
+        return (
+          <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+            <IconSpinner className="w-8 h-8 text-red-600" />
+          </div>
+        );
+      }
+
+      // --- PANTALLA LOGIN ---
+      if (!currentUser) {
+        return (
+          <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
+            <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden p-8">
+              <div className="mb-6"><BrandLogo /></div>
+
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="text-xs font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Usuario</label>
+                  <input
+                    type="text" autoFocus value={loginUsername}
+                    onChange={e => { setLoginUsername(e.target.value); setAuthError(''); }}
+                    placeholder="ej. pedro.martinez"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-slate-900 outline-none focus:border-red-600 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Contraseña</label>
+                  <input
+                    type="password" value={loginPassword}
+                    onChange={e => { setLoginPassword(e.target.value); setAuthError(''); }}
+                    placeholder="••••••••"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-slate-900 outline-none focus:border-red-600 font-mono"
+                  />
+                </div>
+
+                {authError && <p className="text-xs text-red-600 font-extrabold text-center">⚠️ {authError}</p>}
+
+                <button type="submit" disabled={loggingIn} className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-black rounded-2xl text-sm tracking-wide shadow-md transition-all flex items-center justify-center gap-2">
+                  {loggingIn ? <IconSpinner className="w-4 h-4" /> : <span>INGRESAR</span>}
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      }
+
+      // --- MAIN APP VIEW ---
+      return (
+        <div className="min-h-screen flex flex-col">
+          {/* Header Bar */}
+          <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-6 py-3 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3">
+              <BrandLogo variant="header" />
+            </div>
+
+            <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+              {(currentUser.role === 'MASTER' || currentUser.role === 'DISENO') && (
+                <button onClick={() => setActiveTab('CREAR')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'CREAR' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}>
+                  <IconPlus /> <span>Nueva Comanda</span>
+                </button>
+              )}
+              {(currentUser.role === 'MASTER' || currentUser.role === 'DISENO') && (
+                <button onClick={() => setActiveTab('KANBAN')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'KANBAN' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}>
+                  <IconGrid /> <span>Tablero General</span>
+                </button>
+              )}
+              {(currentUser.role === 'MASTER' || currentUser.role === 'TALLER') && (
+                <button onClick={() => setActiveTab('TALLER')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'TALLER' ? 'bg-red-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}>
+                  <IconPrinter /> <span>Cola Taller</span>
+                  <span className="ml-1 px-2 py-0.5 bg-white text-red-600 font-mono text-[10px] rounded-full font-black">
+                    {orders.filter(o => o.status !== 'LISTO').length}
+                  </span>
+                </button>
+              )}
+              {currentUser.role === 'MASTER' && (
+                <button onClick={() => setActiveTab('HISTORIAL')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'HISTORIAL' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}>
+                  <IconCalendar /> <span>Histórico</span>
+                </button>
+              )}
+              {currentUser.role === 'MASTER' && (
+                <button onClick={() => setActiveTab('USUARIOS')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'USUARIOS' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}>
+                  <IconUsers /> <span>Usuarios</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                <span className="text-xl">{currentUser.avatar || '👤'}</span>
+                <div className="text-left">
+                  <div className="text-xs font-bold text-slate-900 leading-tight">{currentUser.name}</div>
+                  <div className="text-[10px] text-red-600 font-mono font-bold">{currentUser.workshopArea || currentUser.role}</div>
+                </div>
+              </div>
+              <button onClick={handleLogout} className="px-3.5 py-2 rounded-2xl bg-slate-100 hover:bg-red-50 text-slate-700 hover:text-red-600 transition-all text-xs font-bold flex items-center gap-1.5 border border-slate-200">
+                <IconLogOut /> <span>Salir</span>
+              </button>
+            </div>
+          </header>
+
+          {/* Área Principal */}
+          <main className="flex-1 max-w-7xl w-full mx-auto p-6">
+            {/* VISTA 1: NUEVA COMANDA */}
+            {activeTab === 'CREAR' && <OrderFormView currentUser={currentUser} onSave={handleSaveNewOrder} />}
+
+            {/* VISTA 2: TABLERO GENERAL */}
+            {activeTab === 'KANBAN' && (
+              <div className="space-y-4">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
+                  <div className="relative w-full sm:w-80">
+                    <input type="text" placeholder="Buscar por #Comanda, Cliente, Material..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-900 outline-none focus:border-red-600" />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-500">Filtrar Taller:</span>
+                    <select value={selectedWorkshopFilter} onChange={e => setSelectedWorkshopFilter(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900 font-bold outline-none">
+                      <option value="TODOS">🌐 Todos los Talleres</option>
+                      <option value="IMPRESION">🖨️ Taller Impresión Digital</option>
+                      <option value="LASER">⚡ Taller Corte Láser / Acrílico</option>
+                      <option value="AMBOS">🔀 Trabajos Mixtos</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {Object.keys(STATUS_FLOW).map(stKey => {
+                    const colOrders = orders.filter(o => {
+                      const isNotExternal = o.targetWorkshop !== 'EXTERNO';
+                      const matchesStatus = o.status === stKey;
+                      const term = searchTerm.toLowerCase();
+                      const matchesSearch = !term ||
+                        o.id.toLowerCase().includes(term) ||
+                        o.clientName.toLowerCase().includes(term) ||
+                        (o.materials || []).some(m => m.toLowerCase().includes(term));
+                      const matchesWorkshop = selectedWorkshopFilter === 'TODOS' || o.targetWorkshop === selectedWorkshopFilter;
+                      return isNotExternal && matchesStatus && matchesSearch && matchesWorkshop;
+                    });
+
+                    const isListoColumn = stKey === 'LISTO';
+                    const visibleOrders = isListoColumn ? colOrders.slice(0, visibleListoCount) : colOrders;
+                    const remainingCount = colOrders.length - visibleOrders.length;
+
+                    return (
+                      <div key={stKey} className="bg-slate-200/50 border border-slate-300/70 rounded-2xl p-4 min-h-[500px]">
+                        <div className="flex justify-between items-center pb-2 mb-3 border-b border-slate-300">
+                          <h3 className="text-xs font-black uppercase text-slate-700">{STATUS_FLOW[stKey].label}</h3>
+                          <span className="px-2.5 py-0.5 rounded-full bg-white border border-slate-300 text-[10px] font-mono font-bold text-slate-900">{colOrders.length}</span>
+                        </div>
+
+                        <div className="space-y-3">
+                          {visibleOrders.map(o => {
+                            const isUrgent = o.priority === 'Urgente';
+                            return (
+                              <div key={o.docId} className={`bg-white border-2 rounded-2xl p-4 space-y-2 shadow-sm hover:shadow-md transition-all ${
+                                isUrgent ? 'border-red-600 shadow-red-500/10 ring-2 ring-red-500/30' : 'border-slate-200'
+                              }`}>
+                                <div className="flex justify-between items-center font-mono text-xs font-bold text-slate-900">
+                                  <span className="text-red-600">{o.id}</span>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-lg border ${getPriorityBadgeClass(o.priority)}`}>
+                                    {o.priority}
+                                  </span>
+                                </div>
+
+                                <div className="text-sm font-extrabold text-slate-900">{o.clientName}</div>
+                                <div className="text-xs text-slate-600 font-mono font-bold">{o.printType} • {o.width || '-'}x{o.height || '-'} {o.unit} ({o.quantity} pz)</div>
+
+                                {getOrderFiles(o).map((f, i) => (
+                                  <a key={i} href={f.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-emerald-700 font-mono font-bold flex items-center gap-1 bg-emerald-50 p-1.5 rounded-lg border border-emerald-200 hover:bg-emerald-100">
+                                    📎 <span className="truncate">{f.name}</span>
+                                  </a>
+                                ))}
+
+                                {o.targetWorkshop === 'AMBOS' && (
+                                  <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-[10px] font-mono space-y-1">
+                                    <div className="flex justify-between">
+                                      <span>🖨️ Impresión:</span>
+                                      <strong className="text-slate-900">{STATUS_FLOW[o.statusImpresion || 'EN_ESPERA'].label.split('.')[1]}</strong>
+                                    </div>
+                                    {o.acceptedByImpresion && <div className="pl-3 text-blue-700">📥 {o.acceptedByImpresion}</div>}
+                                    {o.completedByImpresion && <div className="pl-3 text-emerald-700">✅ {o.completedByImpresion}</div>}
+                                    <div className="flex justify-between border-t border-amber-200 pt-1">
+                                      <span>⚡ Corte Láser:</span>
+                                      <strong className="text-slate-900">{STATUS_FLOW[o.statusLaser || 'EN_ESPERA'].label.split('.')[1]}</strong>
+                                    </div>
+                                    {o.acceptedByLaser && <div className="pl-3 text-blue-700">📥 {o.acceptedByLaser}</div>}
+                                    {o.completedByLaser && <div className="pl-3 text-emerald-700">✅ {o.completedByLaser}</div>}
+                                  </div>
+                                )}
+
+                                <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-[10px] text-slate-600 space-y-0.5 font-mono">
+                                  <div>✏️ Diseñador: <strong className="text-slate-900">{o.designerName}</strong></div>
+                                  {o.acceptedBy && <div>📥 Recibido por: <strong className="text-blue-800">{o.acceptedBy}</strong></div>}
+                                  {o.completedBy && <div>✅ Finalizado por: <strong className="text-emerald-800">{o.completedBy}</strong></div>}
+                                </div>
+
+                                <div className="text-[10px] font-mono text-slate-400 pt-1 flex justify-between items-center border-t border-slate-100">
+                                  <span>📅 {o.createdAt}</span>
+
+                                  <div className="flex items-center gap-2">
+                                    {currentUser.role === 'MASTER' && (
+                                      <button onClick={() => handleDeleteOrder(o.docId, o.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Eliminar Comanda (Solo Master)">
+                                        <IconTrash />
+                                      </button>
+                                    )}
+
+                                    <button onClick={() => setTicketModalOrder(o)} className="text-slate-600 hover:text-red-600 text-xs font-bold flex items-center gap-1">
+                                      <IconPrinter /> <span>Ver Tiquete</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {isListoColumn && remainingCount > 0 && (
+                          <button
+                            onClick={() => setVisibleListoCount(c => c + 10)}
+                            className="w-full mt-3 py-2.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 transition-all"
+                          >
+                            Ver más ({remainingCount} restantes)
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* VISTA 3: COLA DE TALLER */}
+            {activeTab === 'TALLER' && (
+              <div className="space-y-6">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-red-100 text-red-600 rounded-2xl border border-red-200">
+                      <IconPrinter />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-black text-slate-900">Cola de Trabajo de Taller</h2>
+                      <p className="text-xs text-slate-500">
+                        {currentUser.role === 'TALLER' && currentUser.workshopArea !== 'AMBOS'
+                          ? `Acceso Aislado: Viendo únicamente pendientes de ${currentUser.workshopArea === 'IMPRESION' ? 'Impresión Digital' : 'Corte Láser & MDF'}.`
+                          : 'Procesa los trabajos activos pendientes.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {currentUser.role === 'TALLER' && currentUser.workshopArea !== 'AMBOS' ? (
+                    <div className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold font-mono text-red-600 flex items-center gap-2">
+                      <IconLock />
+                      <span>Cola Aislada: {currentUser.workshopArea === 'IMPRESION' ? '🖨️ Impresión' : '⚡ Corte Láser'}</span>
+                    </div>
+                  ) : (
+                    <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 gap-1">
+                      <button onClick={() => setSelectedWorkshopFilter('IMPRESION')} className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${selectedWorkshopFilter === 'IMPRESION' ? 'bg-slate-900 text-white shadow' : 'text-slate-600'}`}>
+                        <span>🖨️ Taller Impresión</span>
+                      </button>
+                      <button onClick={() => setSelectedWorkshopFilter('LASER')} className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${selectedWorkshopFilter === 'LASER' ? 'bg-purple-600 text-white shadow' : 'text-slate-600'}`}>
+                        <span>⚡ Taller Corte Láser / MDF</span>
+                      </button>
+                      <button onClick={() => setSelectedWorkshopFilter('TODOS')} className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${selectedWorkshopFilter === 'TODOS' ? 'bg-red-600 text-white' : 'text-slate-600'}`}>
+                        🌐 Ver Todos
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {(() => {
+                  // Qué taller es "el mío" en esta vista: para un operario de un
+                  // solo taller, siempre el suyo; para MASTER/Ambos, el que tenga
+                  // seleccionado en el filtro de arriba (por defecto Impresión).
+                  const activeArea = currentUser.workshopArea === 'LASER'
+                    ? 'LASER'
+                    : (selectedWorkshopFilter === 'LASER' ? 'LASER' : 'IMPRESION');
+
+                  const isPendingForThisView = (o) => {
+                    if (o.targetWorkshop === 'AMBOS') {
+                      if (selectedWorkshopFilter === 'TODOS' && (currentUser.role === 'MASTER' || currentUser.workshopArea === 'AMBOS')) {
+                        return o.status !== 'LISTO';
+                      }
+                      if (selectedWorkshopFilter === 'IMPRESION' || activeArea === 'IMPRESION') return (o.statusImpresion || 'EN_ESPERA') !== 'LISTO';
+                      if (selectedWorkshopFilter === 'LASER' || activeArea === 'LASER') return (o.statusLaser || 'EN_ESPERA') !== 'LISTO';
+                      return o.status !== 'LISTO';
+                    }
+                    return o.status !== 'LISTO';
+                  };
+
+                  const scopeMatches = (o) => {
+                    if (o.targetWorkshop === 'EXTERNO') return false; // los trabajos externos no pasan por taller
+                    if (currentUser.role === 'MASTER' || currentUser.workshopArea === 'AMBOS') {
+                      if (selectedWorkshopFilter === 'TODOS') return true;
+                      return o.targetWorkshop === selectedWorkshopFilter || o.targetWorkshop === 'AMBOS';
+                    }
+                    return true; // ya viene filtrado por la consulta a Firestore
+                  };
+
+                  const activePendingOrders = orders.filter(o => isPendingForThisView(o) && scopeMatches(o));
+                  const completedWorkshopOrders = orders.filter(o => !isPendingForThisView(o) && scopeMatches(o));
+
+                  return (
+                    <div className="space-y-8">
+                      {activePendingOrders.length === 0 ? (
+                        <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-3 shadow-sm">
+                          <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                            <IconCheckCircle />
+                          </div>
+                          <h3 className="text-base font-extrabold text-slate-900">¡Excelente! Sin comandas pendientes en esta cola.</h3>
+                          <p className="text-xs text-slate-500">Cualquier nueva comanda enviada por los diseñadores sonará y aparecerá aquí automáticamente.</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {activePendingOrders.map(order => {
+                            const wsInfo = WORKSHOP_TYPES[order.targetWorkshop || 'IMPRESION'];
+                            const isUrgent = order.priority === 'Urgente';
+                            const isMixed = order.targetWorkshop === 'AMBOS';
+                            const currentSubStatus = isMixed
+                              ? (activeArea === 'LASER' ? (order.statusLaser || 'EN_ESPERA') : (order.statusImpresion || 'EN_ESPERA'))
+                              : order.status;
+                            return (
+                              <div key={order.docId} className={`bg-white border-2 rounded-3xl p-5 space-y-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between ${
+                                isUrgent ? 'border-red-600 shadow-red-500/10 ring-2 ring-red-500/30' : 'border-slate-200'
+                              }`}>
+                                <div className="space-y-3">
+                                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                                    <span className="text-xl font-black font-mono text-slate-900">{order.id}</span>
+                                    <span className={`px-2.5 py-1 rounded-xl text-xs font-bold border ${getPriorityBadgeClass(order.priority)}`}>
+                                      {order.priority}
+                                    </span>
+                                  </div>
+
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                      <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${wsInfo.badgeColor}`}>
+                                        {wsInfo.icon} {wsInfo.label}
+                                      </span>
+                                    </div>
+                                    <h3 className="text-base font-extrabold text-slate-900">{order.clientName}</h3>
+                                    <p className="text-xs text-slate-500">Tel: {order.clientPhone || 'N/A'}</p>
+                                  </div>
+
+                                  {getOrderFiles(order).map((f, i) => (
+                                    <a key={i} href={f.url} target="_blank" rel="noopener noreferrer" className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs font-mono font-bold text-emerald-800 flex items-center gap-2 hover:bg-emerald-100">
+                                      📎 <span className="truncate">Descargar: {f.name}</span>
+                                    </a>
+                                  ))}
+
+                                  {order.usbName && (
+                                    <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-2xl text-xs font-mono font-bold text-blue-800 flex items-center gap-2">
+                                      💾 <span>{order.usbName}</span>
+                                    </div>
+                                  )}
+
+                                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                                    <div className="text-slate-900 font-bold font-mono border-b border-slate-200 pb-1.5">
+                                      {order.printType} • {order.width || '-'} x {order.height || '-'} {order.unit} ({order.quantity} Pz)
+                                    </div>
+
+                                    {order.materials.length > 0 && (
+                                      <div>
+                                        <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Materiales:</span>
+                                        <div className="flex flex-wrap gap-1">
+                                          {order.materials.map(m => (
+                                            <span key={m} className="px-2 py-0.5 bg-white border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-800">{m}</span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {order.finishes.length > 0 && (
+                                      <div>
+                                        <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Acabados:</span>
+                                        <div className="flex flex-wrap gap-1">
+                                          {order.finishes.map(f => (
+                                            <span key={f} className="px-2 py-0.5 bg-purple-50 border border-purple-200 rounded-lg text-[11px] font-semibold text-purple-900">✂️ {f}</span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {isMixed && (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs font-mono space-y-1.5">
+                                      <div className="font-extrabold text-[10px] uppercase text-amber-800 mb-1">🔀 Avance Independiente por Taller:</div>
+                                      <div className="flex justify-between">
+                                        <span>🖨️ Impresión Digital:</span>
+                                        <strong className="text-slate-900">{STATUS_FLOW[order.statusImpresion || 'EN_ESPERA'].label}</strong>
+                                      </div>
+                                      {order.acceptedByImpresion && <div className="pl-4 text-blue-700">📥 {order.acceptedByImpresion}</div>}
+                                      {order.completedByImpresion && <div className="pl-4 text-emerald-700">✅ {order.completedByImpresion}</div>}
+                                      <div className="flex justify-between border-t border-amber-200 pt-1.5">
+                                        <span>⚡ Corte Láser / MDF:</span>
+                                        <strong className="text-slate-900">{STATUS_FLOW[order.statusLaser || 'EN_ESPERA'].label}</strong>
+                                      </div>
+                                      {order.acceptedByLaser && <div className="pl-4 text-blue-700">📥 {order.acceptedByLaser}</div>}
+                                      {order.completedByLaser && <div className="pl-4 text-emerald-700">✅ {order.completedByLaser}</div>}
+                                    </div>
+                                  )}
+
+                                  <div className="flex gap-1.5 flex-wrap pt-1">
+                                    {(order.targetWorkshop === 'IMPRESION' || order.targetWorkshop === 'AMBOS') &&
+                                     (currentUser.role === 'MASTER' || currentUser.workshopArea === 'IMPRESION' || currentUser.workshopArea === 'AMBOS') && (
+                                      <button
+                                        onClick={() => setMaterialReportModal({ order, type: 'IMPRESION' })}
+                                        className="py-1.5 px-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-900 rounded-xl font-bold text-[10px] flex items-center justify-between transition-all"
+                                      >
+                                        <span>🖨️ Consumo Impresión</span>
+                                        <span className="underline ml-1">{(order.printMaterialReportText || order.printMaterialReportImg) ? '✏️ Ver' : '➕ Reg'}</span>
+                                      </button>
+                                    )}
+
+                                    {(order.targetWorkshop === 'LASER' || order.targetWorkshop === 'AMBOS') &&
+                                     (currentUser.role === 'MASTER' || currentUser.workshopArea === 'LASER' || currentUser.workshopArea === 'AMBOS') && (
+                                      <button
+                                        onClick={() => setMaterialReportModal({ order, type: 'LASER' })}
+                                        className="py-1.5 px-2 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-900 rounded-xl font-bold text-[10px] flex items-center justify-between transition-all"
+                                      >
+                                        <span>⚡ Consumo Láser</span>
+                                        <span className="underline ml-1">{(order.laserMaterialReportText || order.laserMaterialReportImg) ? '✏️ Ver' : '➕ Reg'}</span>
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="p-2.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs font-mono space-y-1">
+                                    <div className="text-slate-600">✏️ Diseñador: <strong className="text-slate-900">{order.designerName}</strong></div>
+                                    {order.acceptedBy && <div className="text-slate-600">📥 Recibido por: <strong className="text-blue-800">{order.acceptedBy}</strong></div>}
+                                  </div>
+
+                                  {order.notes && (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 space-y-1">
+                                      <span className="font-extrabold text-[10px] uppercase tracking-wider block text-amber-800">💬 Observaciones Taller:</span>
+                                      <p className="whitespace-pre-wrap">{order.notes}</p>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex gap-2 pt-2">
+                                  <button onClick={() => setTicketModalOrder(order)} className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-2xl text-xs font-bold border border-slate-200 flex items-center justify-center transition-all" title="Imprimir Tiquete">
+                                    <IconPrinter />
+                                  </button>
+
+                                  {currentUser.role === 'MASTER' && (
+                                    <button onClick={() => handleDeleteOrder(order.docId, order.id)} className="p-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl text-xs font-bold border border-red-200 flex items-center justify-center transition-all" title="Eliminar Comanda (Solo Master)">
+                                      <IconTrash />
+                                    </button>
+                                  )}
+
+                                  <button onClick={() => handleAdvanceStatus(order.docId, activeArea)} className="flex-1 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-xs tracking-wide">
+                                    <span>{STATUS_FLOW[currentSubStatus].nextLabel}</span>
+                                    <IconArrowRight />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <div className="pt-6 border-t border-slate-200">
+                        <button
+                          onClick={() => setShowCompletedWorkshopSection(!showCompletedWorkshopSection)}
+                          className="w-full p-4 bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-xs font-bold transition-all text-slate-800 shadow-sm"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-emerald-600 text-base">✅</span>
+                            <span>MÓDULO DE COMANDAS FINALIZADAS ({completedWorkshopOrders.length})</span>
+                          </div>
+                          <span className="text-red-600 underline font-mono text-[11px]">
+                            {showCompletedWorkshopSection ? '▲ Ocultar Finalizadas' : '▼ Desplegar Finalizadas'}
+                          </span>
+                        </button>
+
+                        {showCompletedWorkshopSection && (
+                          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {completedWorkshopOrders.length === 0 ? (
+                              <div className="col-span-full p-6 text-center text-slate-400 text-xs italic bg-white rounded-2xl border border-slate-200">
+                                No hay comandas finalizadas recientemente en este taller.
+                              </div>
+                            ) : (
+                              completedWorkshopOrders.map(order => {
+                                const isMixedCompleted = order.targetWorkshop === 'AMBOS';
+                                return (
+                                <div key={order.docId} className="bg-white border border-emerald-300 rounded-2xl p-4 space-y-2 shadow-sm">
+                                  <div className="flex justify-between items-center font-mono text-xs font-bold text-emerald-800">
+                                    <span>{order.id}</span>
+                                    <span className="text-[10px] px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-900 font-extrabold border border-emerald-300">FINALIZADO</span>
+                                  </div>
+                                  <div className="text-xs font-bold text-slate-900">{order.clientName}</div>
+                                  <div className="text-[11px] text-slate-600 font-mono">{order.printType} • {order.width}x{order.height} {order.unit} ({order.quantity} pz)</div>
+                                  {isMixedCompleted ? (
+                                    <div className="text-[10px] text-slate-500 font-mono space-y-0.5">
+                                      <div>🖨️ Impresión: <strong className="text-emerald-800">{order.completedByImpresion || (order.statusImpresion === 'LISTO' ? 'Completado' : STATUS_FLOW[order.statusImpresion || 'EN_ESPERA'].label)}</strong></div>
+                                      <div>⚡ Láser: <strong className="text-emerald-800">{order.completedByLaser || (order.statusLaser === 'LISTO' ? 'Completado' : STATUS_FLOW[order.statusLaser || 'EN_ESPERA'].label)}</strong></div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-[10px] text-slate-500 font-mono">✅ Finalizado por: <strong className="text-emerald-800">{order.completedBy || 'Taller'}</strong></div>
+                                  )}
+
+                                  <div className="flex gap-1.5 flex-wrap pt-1">
+                                    {(order.printMaterialReportText || order.printMaterialReportImg) && (currentUser.role === 'MASTER' || currentUser.workshopArea === 'IMPRESION' || currentUser.workshopArea === 'AMBOS') && (
+                                      <button onClick={() => setMaterialReportModal({ order, type: 'IMPRESION' })} className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-900 rounded-lg text-[10px] font-bold">
+                                        🖨️ Consumo Impresión
+                                      </button>
+                                    )}
+                                    {(order.laserMaterialReportText || order.laserMaterialReportImg) && (currentUser.role === 'MASTER' || currentUser.workshopArea === 'LASER' || currentUser.workshopArea === 'AMBOS') && (
+                                      <button onClick={() => setMaterialReportModal({ order, type: 'LASER' })} className="px-2 py-0.5 bg-purple-50 border border-purple-200 text-purple-900 rounded-lg text-[10px] font-bold">
+                                        ⚡ Consumo Láser
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="flex justify-between items-center pt-1 border-t border-slate-100">
+                                    {currentUser.role === 'MASTER' ? (
+                                      <button onClick={() => handleDeleteOrder(order.docId, order.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all text-xs font-bold flex items-center gap-1" title="Eliminar Comanda (Solo Master)">
+                                        <IconTrash /> <span>Eliminar</span>
+                                      </button>
+                                    ) : <div />}
+
+                                    <button onClick={() => setTicketModalOrder(order)} className="text-slate-600 hover:text-red-600 text-xs font-bold flex items-center gap-1">
+                                      <IconPrinter /> <span>Reimprimir Tiquete</span>
+                                    </button>
+                                  </div>
+                                </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* VISTA 4: HISTÓRICO Y REPORTES */}
+            {activeTab === 'HISTORIAL' && currentUser.role === 'MASTER' && (
+              <HistoricalReportView orders={orders} users={users} onOpenTicket={setTicketModalOrder} onDeleteOrder={handleDeleteOrder} onUpdatePaymentStatus={handleUpdatePaymentStatus} onOpenMaterialReportModal={(o, type) => setMaterialReportModal({ order: o, type })} currentUser={currentUser} />
+            )}
+
+            {/* VISTA 5: GESTIÓN DE USUARIOS */}
+            {activeTab === 'USUARIOS' && currentUser.role === 'MASTER' && (
+              <UserManagementView users={users} onCreateUser={handleCreateUser} onToggleUserDisabled={handleToggleUserDisabled} currentUser={currentUser} />
+            )}
+          </main>
+
+          {ticketModalOrder && (
+            <TicketModal order={ticketModalOrder} onClose={() => setTicketModalOrder(null)} />
+          )}
+
+          {materialReportModal && (
+            <MaterialReportModal
+              order={materialReportModal.order}
+              type={materialReportModal.type}
+              onClose={() => setMaterialReportModal(null)}
+              onSave={async (reportText, reportImgUrl) => {
+                await handleSaveMaterialReport(materialReportModal.order.docId, reportText, reportImgUrl, materialReportModal.type);
+                setMaterialReportModal(null);
+              }}
+            />
+          )}
+        </div>
+      );
+    }
+
+    // --- MÓDULO HISTÓRICO Y REPORTES ---
+    function HistoricalReportView({ orders, users, onOpenTicket, onDeleteOrder, onUpdatePaymentStatus, onOpenMaterialReportModal, currentUser }) {
+      const toast = useToast();
+      const [periodFilter, setDatePeriodFilter] = useState('TODAS');
+      const [startDate, setStartDate] = useState('');
+      const [endDate, setEndDate] = useState('');
+      const [workshopFilter, setWorkshopFilter] = useState('TODOS');
+      const [designerFilter, setDesignerFilter] = useState('TODOS');
+      const [statusFilter, setStatusFilter] = useState('TODAS');
+      const [paymentFilter, setPaymentFilter] = useState('TODAS');
+      const [searchTerm, setSearchTerm] = useState('');
+      const [visibleCount, setVisibleCount] = useState(12);
+
+      useEffect(() => {
+        setVisibleCount(12);
+      }, [periodFilter, startDate, endDate, workshopFilter, designerFilter, statusFilter, paymentFilter, searchTerm]);
+
+      const filteredOrders = useMemo(() => {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const sevenDaysAgo = now.getTime() - (7 * 24 * 60 * 60 * 1000);
+
+        return orders.filter(o => {
+          const oTime = o.timestamp || Date.now();
+
+          let matchesPeriod = true;
+          if (periodFilter === 'HOY') {
+            matchesPeriod = oTime >= startOfToday;
+          } else if (periodFilter === 'SEMANA') {
+            matchesPeriod = oTime >= sevenDaysAgo;
+          } else if (periodFilter === 'MES') {
+            const oDate = new Date(oTime);
+            matchesPeriod = oDate.getMonth() === now.getMonth() && oDate.getFullYear() === now.getFullYear();
+          } else if (periodFilter === 'ANIO') {
+            const oDate = new Date(oTime);
+            matchesPeriod = oDate.getFullYear() === now.getFullYear();
+          } else if (periodFilter === 'RANGO' && startDate && endDate) {
+            const sTime = new Date(startDate + 'T00:00:00').getTime();
+            const eTime = new Date(endDate + 'T23:59:59').getTime();
+            matchesPeriod = oTime >= sTime && oTime <= eTime;
+          }
+
+          const matchesWorkshop = workshopFilter === 'TODOS' || o.targetWorkshop === workshopFilter;
+          const matchesDesigner = designerFilter === 'TODOS' || o.designerName === designerFilter;
+          const matchesStatus = statusFilter === 'TODAS' || o.status === statusFilter;
+          const matchesPayment = paymentFilter === 'TODAS' || (o.paymentStatus || 'PENDIENTE') === paymentFilter;
+          const matchesSearch = !searchTerm ||
+            o.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            o.clientName.toLowerCase().includes(searchTerm.toLowerCase());
+
+          return matchesPeriod && matchesWorkshop && matchesDesigner && matchesStatus && matchesPayment && matchesSearch;
+        });
+      }, [orders, periodFilter, startDate, endDate, workshopFilter, designerFilter, statusFilter, paymentFilter, searchTerm]);
+
+      const metrics = useMemo(() => {
+        const total = filteredOrders.length;
+        const impresion = filteredOrders.filter(o => o.targetWorkshop === 'IMPRESION').length;
+        const laser = filteredOrders.filter(o => o.targetWorkshop === 'LASER').length;
+        const listos = filteredOrders.filter(o => o.status === 'LISTO').length;
+        return { total, impresion, laser, listos };
+      }, [filteredOrders]);
+
+      const visibleOrders = filteredOrders.slice(0, visibleCount);
+      const remainingCount = filteredOrders.length - visibleOrders.length;
+
+      // Exporta exactamente lo que está filtrado/visible en la tabla (respeta
+      // el rango de fechas y los demás filtros activos).
+      const handleExportExcel = () => {
+        if (typeof XLSX === 'undefined') {
+          return toast('No se pudo cargar el módulo de Excel. Verifica tu conexión e intenta de nuevo.', 'error');
+        }
+        if (filteredOrders.length === 0) {
+          return toast('No hay comandas para exportar con los filtros actuales.', 'error');
+        }
+
+        const rows = filteredOrders.map(o => {
+          const isMixed = o.targetWorkshop === 'AMBOS';
+          let aceptadoPor = '';
+          let completadoPor = '';
+          if (isMixed) {
+            const acc = [];
+            if (o.acceptedByImpresion) acc.push(`Impresión: ${o.acceptedByImpresion}`);
+            if (o.acceptedByLaser) acc.push(`Láser: ${o.acceptedByLaser}`);
+            aceptadoPor = acc.join(' / ');
+            const comp = [];
+            if (o.completedByImpresion) comp.push(`Impresión: ${o.completedByImpresion}`);
+            if (o.completedByLaser) comp.push(`Láser: ${o.completedByLaser}`);
+            completadoPor = comp.join(' / ');
+          } else {
+            aceptadoPor = o.acceptedBy || '';
+            completadoPor = o.completedBy || '';
+          }
+
+          return {
+            '# Comanda': o.id,
+            'Fecha': o.createdAt,
+            'Cliente': o.clientName,
+            'Teléfono': o.clientPhone || '',
+            'Taller': WORKSHOP_TYPES[o.targetWorkshop || 'IMPRESION'].label,
+            'Proceso': o.printType || '',
+            'Ancho': o.width || '',
+            'Alto': o.height || '',
+            'Unidad': o.unit || '',
+            'Cantidad': o.quantity || '',
+            'Materiales / Procesos': (o.materials || []).join(', '),
+            'Diseñador': o.designerName || '',
+            'Estado': STATUS_FLOW[o.status] ? STATUS_FLOW[o.status].label : (o.status || ''),
+            'Aceptado Por': aceptadoPor,
+            'Completado Por': completadoPor,
+            'Estado de Pago': PAYMENT_STATUS_OPTIONS[o.paymentStatus || 'PENDIENTE'].label,
+            'Costo Total': o.totalCost || 0,
+            'Abono / Anticipo': o.advancePayment || 0,
+            'Saldo Pendiente': o.pendingBalance || 0,
+            'Consumo Impresión': o.printMaterialReportText || '',
+            'Consumo Láser': o.laserMaterialReportText || '',
+            'Observaciones': o.notes || ''
+          };
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(rows);
+        worksheet['!cols'] = Object.keys(rows[0]).map(() => ({ wch: 20 }));
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Histórico');
+        const fileName = `Historico_Bigote_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        XLSX.writeFile(workbook, fileName);
+        toast(`Excel descargado: ${filteredOrders.length} comandas.`, 'success');
+      };
+
+      return (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-red-600 font-extrabold text-xs uppercase tracking-wider mb-1">
+                <IconCalendar /> <span>Módulo de Supervisión e Histórico</span>
+              </div>
+              <h2 className="text-xl font-black text-slate-900">Registro Histórico de Comandas</h2>
+              <p className="text-xs text-slate-500">Consulta el archivo de trabajos, filtra por periodos de tiempo y audita la trazabilidad.</p>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="text-right font-mono hidden sm:block">
+                <div className="text-2xl font-black text-red-600">{metrics.total}</div>
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Comandas Encontradas</div>
+              </div>
+              <button
+                onClick={handleExportExcel}
+                className="py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-xs tracking-wide"
+                title="Descargar en Excel las comandas filtradas"
+              >
+                <span>📊 Descargar Excel</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-4 shadow-sm">
+            <div>
+              <label className="text-[11px] font-extrabold text-slate-900 uppercase tracking-wider block mb-2">Filtrar por Periodo de Tiempo:</label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: 'HOY', label: '📅 Día Actual (Hoy)' },
+                  { id: 'SEMANA', label: '📆 Últimos 7 Días' },
+                  { id: 'MES', label: '🗓️ Este Mes' },
+                  { id: 'ANIO', label: '🎆 Este Año' },
+                  { id: 'RANGO', label: '📆 Rango de Fechas (Desde/Hasta)' },
+                  { id: 'TODAS', label: '🌐 Histórico Total (Todas)' }
+                ].map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => setDatePeriodFilter(p.id)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+                      periodFilter === p.id
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-md'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              {periodFilter === 'RANGO' && (
+                <div className="mt-3 p-3 bg-slate-50 rounded-2xl border border-slate-200 flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-700">Desde:</span>
+                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-white border border-slate-300 rounded-xl p-2 text-xs font-bold text-slate-900 outline-none" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-700">Hasta:</span>
+                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-white border border-slate-300 rounded-xl p-2 text-xs font-bold text-slate-900 outline-none" />
+                  </div>
+                  {!(startDate && endDate) && (
+                    <span className="text-[11px] text-amber-600 italic">Selecciona ambas fechas para aplicar el rango.</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 pt-3 border-t border-slate-100">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Taller Destino</label>
+                <select value={workshopFilter} onChange={e => setWorkshopFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 font-bold outline-none">
+                  <option value="TODOS">Todos los Talleres</option>
+                  <option value="IMPRESION">🖨️ Impresión Digital</option>
+                  <option value="LASER">⚡ Corte Láser / MDF</option>
+                  <option value="AMBOS">🔀 Trabajos Mixtos</option>
+                  <option value="EXTERNO">🏢 Externos / Por Fuera</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Diseñador / Asesor</label>
+                <select value={designerFilter} onChange={e => setDesignerFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 font-bold outline-none">
+                  <option value="TODOS">Todos los Diseñadores</option>
+                  {users.filter(u => u.role === 'DISENO' || u.role === 'MASTER').map(u => (
+                    <option key={u.uid} value={u.name}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Estado de Producción</label>
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 font-bold outline-none">
+                  <option value="TODAS">Todos los Estados</option>
+                  <option value="EN_ESPERA">1. En Espera</option>
+                  <option value="EN_PRODUCCION">2. En Producción</option>
+                  <option value="LISTO">3. Listo / Terminado</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Estado de Pago</label>
+                <select value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 font-bold outline-none">
+                  <option value="TODAS">Todos los Estados Pago</option>
+                  {Object.keys(PAYMENT_STATUS_OPTIONS).map(k => (
+                    <option key={k} value={k}>{PAYMENT_STATUS_OPTIONS[k].label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Buscar Texto</label>
+                <input type="text" placeholder="#CMD, Cliente..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 outline-none" />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 font-mono shadow-sm">
+              <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Filtrado</span>
+              <span className="text-xl font-black text-slate-900">{metrics.total} comandas</span>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 font-mono shadow-sm">
+              <span className="text-[10px] text-slate-400 uppercase font-bold block">Taller Impresión</span>
+              <span className="text-xl font-black text-blue-700">{metrics.impresion} trabajos</span>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 font-mono shadow-sm">
+              <span className="text-[10px] text-slate-400 uppercase font-bold block">Taller Corte Láser</span>
+              <span className="text-xl font-black text-purple-700">{metrics.laser} trabajos</span>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 font-mono shadow-sm">
+              <span className="text-[10px] text-slate-400 uppercase font-bold block">Trabajos Finalizados</span>
+              <span className="text-xl font-black text-emerald-700">{metrics.listos} listos</span>
+            </div>
+          </div>
+
+          {filteredOrders.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center text-slate-400 text-sm shadow-sm">
+              No se encontraron comandas registradas para el periodo o filtros seleccionados.
+            </div>
+          ) : (
+            <React.Fragment>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {visibleOrders.map(o => {
+                  const wsInfo = WORKSHOP_TYPES[o.targetWorkshop || 'IMPRESION'];
+                  const currentPayStatus = o.paymentStatus || 'PENDIENTE';
+                  return (
+                    <div key={o.docId} className="bg-white border border-slate-200 rounded-3xl p-5 space-y-3 shadow-sm hover:shadow-md transition-all flex flex-col">
+                      <div className="flex justify-between items-start gap-2 border-b border-slate-100 pb-3">
+                        <div>
+                          <div className="font-mono font-black text-red-600 text-sm">{o.id}</div>
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">{o.createdAt}</div>
+                        </div>
+                        <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-extrabold whitespace-nowrap ${STATUS_FLOW[o.status].color}`}>
+                          {STATUS_FLOW[o.status].label}
+                        </span>
+                      </div>
+
+                      <div>
+                        <div className="font-extrabold text-slate-900 text-sm">{o.clientName}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{o.clientPhone || 'Sin teléfono'}</div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${wsInfo.badgeColor}`}>
+                          {wsInfo.icon} {wsInfo.label.split(' ')[1]}
+                        </span>
+
+                        {(o.targetWorkshop === 'IMPRESION' || o.targetWorkshop === 'AMBOS') &&
+                         (currentUser.role === 'MASTER' || currentUser.workshopArea === 'IMPRESION' || currentUser.workshopArea === 'AMBOS') && (
+                          <button
+                            onClick={() => onOpenMaterialReportModal(o, 'IMPRESION')}
+                            className={`px-2 py-0.5 rounded-lg font-bold text-[10px] flex items-center gap-1 border transition-all ${
+                              (o.printMaterialReportText || o.printMaterialReportImg)
+                                ? 'bg-blue-100 hover:bg-blue-200 text-blue-900 border-blue-300'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border-slate-300'
+                            }`}
+                            title="Ver/Editar Consumo Impresión Digital"
+                          >
+                            <span>{(o.printMaterialReportText || o.printMaterialReportImg) ? '🖨️ Consumo Imp' : '+ Impresión'}</span>
+                          </button>
+                        )}
+
+                        {(o.targetWorkshop === 'LASER' || o.targetWorkshop === 'AMBOS') &&
+                         (currentUser.role === 'MASTER' || currentUser.workshopArea === 'LASER' || currentUser.workshopArea === 'AMBOS') && (
+                          <button
+                            onClick={() => onOpenMaterialReportModal(o, 'LASER')}
+                            className={`px-2 py-0.5 rounded-lg font-bold text-[10px] flex items-center gap-1 border transition-all ${
+                              (o.laserMaterialReportText || o.laserMaterialReportImg)
+                                ? 'bg-purple-100 hover:bg-purple-200 text-purple-900 border-purple-300'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border-slate-300'
+                            }`}
+                            title="Ver/Editar Consumo Láser / Acrílico"
+                          >
+                            <span>{(o.laserMaterialReportText || o.laserMaterialReportImg) ? '⚡ Consumo Láser' : '+ Láser'}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs space-y-2">
+                        <div className="flex justify-between font-mono">
+                          <span className="text-slate-500">{o.printType}</span>
+                          <span className="text-slate-900 font-bold">{o.width || '-'}x{o.height || '-'} {o.unit} ({o.quantity} pz)</span>
+                        </div>
+                        {o.targetWorkshop === 'AMBOS' && (
+                          <div className="text-[10px] font-mono text-slate-500 pt-1.5 border-t border-slate-200">
+                            🖨️ {STATUS_FLOW[o.statusImpresion || 'EN_ESPERA'].label.split('.')[1]} | ⚡ {STATUS_FLOW[o.statusLaser || 'EN_ESPERA'].label.split('.')[1]}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="text-[10px] font-mono space-y-0.5">
+                        <div className="text-slate-600">✏️ {o.designerName}</div>
+                        {o.targetWorkshop === 'AMBOS' ? (
+                          <>
+                            {o.acceptedByImpresion && <div className="text-blue-700 font-bold">📥🖨️ {o.acceptedByImpresion}</div>}
+                            {o.completedByImpresion && <div className="text-emerald-700 font-bold">✅🖨️ {o.completedByImpresion}</div>}
+                            {o.acceptedByLaser && <div className="text-blue-700 font-bold">📥⚡ {o.acceptedByLaser}</div>}
+                            {o.completedByLaser && <div className="text-emerald-700 font-bold">✅⚡ {o.completedByLaser}</div>}
+                          </>
+                        ) : (
+                          <>
+                            {o.acceptedBy && <div className="text-blue-700 font-bold">📥 {o.acceptedBy}</div>}
+                            {o.completedBy && <div className="text-emerald-700 font-bold">✅ {o.completedBy}</div>}
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <select
+                          value={currentPayStatus}
+                          onChange={e => onUpdatePaymentStatus(o.docId, e.target.value)}
+                          className={`px-2.5 py-1 rounded-xl font-bold text-xs border outline-none cursor-pointer ${PAYMENT_STATUS_OPTIONS[currentPayStatus].class}`}
+                        >
+                          {Object.keys(PAYMENT_STATUS_OPTIONS).map(k => (
+                            <option key={k} value={k}>{PAYMENT_STATUS_OPTIONS[k].label}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {(o.totalCost || o.advancePayment) ? (
+                        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 font-mono text-[11px] space-y-0.5">
+                          <div className="flex justify-between text-slate-700">Costo: <strong className="text-slate-900">{formatCurrency(o.totalCost)}</strong></div>
+                          <div className="flex justify-between text-blue-700">Abono: <strong>{formatCurrency(o.advancePayment)}</strong></div>
+                          <div className="flex justify-between text-red-600 font-black">Saldo: {formatCurrency(o.pendingBalance)}</div>
+                        </div>
+                      ) : null}
+
+                      <div className="flex items-center justify-between gap-2 pt-3 mt-auto border-t border-slate-100">
+                        {currentUser.role === 'MASTER' ? (
+                          <button onClick={() => onDeleteOrder(o.docId, o.id)} className="p-2 bg-red-50 hover:bg-red-600 hover:text-white text-red-600 rounded-xl transition-all font-bold text-[11px] flex items-center gap-1" title="Eliminar Comanda (Solo Master)">
+                            <IconTrash /> <span>Eliminar</span>
+                          </button>
+                        ) : <div />}
+
+                        <button onClick={() => onOpenTicket(o)} className="p-2 bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 rounded-xl transition-all font-bold text-[11px] flex items-center gap-1" title="Ver e Imprimir Tiquete">
+                          <IconPrinter /> <span>Ver Tiquete</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {remainingCount > 0 && (
+                <button
+                  onClick={() => setVisibleCount(c => c + 12)}
+                  className="w-full py-3 bg-white hover:bg-slate-50 border border-slate-300 rounded-2xl text-xs font-bold text-slate-700 transition-all shadow-sm"
+                >
+                  Ver más ({remainingCount} restantes)
+                </button>
+              )}
+            </React.Fragment>
+          )}
+        </div>
+      );
+    }
+
+    // --- FORMULARIO NUEVA COMANDA ---
+    function OrderFormView({ currentUser, onSave }) {
+      const toast = useToast();
+      const [clientName, setClientName] = useState('');
+      const [clientPhone, setClientPhone] = useState('');
+      const [priority, setPriority] = useState('Normal');
+      const [targetWorkshop, setTargetWorkshop] = useState('IMPRESION');
+      const [printType, setPrintType] = useState('Eco-Solvente');
+
+      const [baseMaterial, setBaseMaterial] = useState('');
+      const [customMaterial, setCustomMaterial] = useState('');
+      const [materialFinish, setMaterialFinish] = useState('');
+      const [plastificadoType, setPlastificadoType] = useState('');
+      const [plastificadoFinish, setPlastificadoFinish] = useState('');
+      const [hasCorte, setHasCorte] = useState(false);
+      const [hasTransporte, setHasTransporte] = useState(false);
+      const [customProcess, setCustomProcess] = useState('');
+
+      const [width, setWidth] = useState('');
+      const [height, setHeight] = useState('');
+      const [unit, setUnit] = useState('cm');
+      const [quantity, setQuantity] = useState(1);
+
+      const [usbName, setUsbName] = useState('');
+      const [notes, setNotes] = useState('');
+      const [selectedFiles, setSelectedFiles] = useState([]);
+      const [saving, setSaving] = useState(false);
+      const [uploadProgress, setUploadProgress] = useState(null); // { loaded, total } | null
+
+      const [totalCost, setTotalCost] = useState('');
+      const [advancePayment, setAdvancePayment] = useState('');
+      const pendingBalance = useMemo(() => {
+        const tot = parseFloat(totalCost) || 0;
+        const adv = parseFloat(advancePayment) || 0;
+        return tot - adv;
+      }, [totalCost, advancePayment]);
+
+      const isMaterialSelected = Boolean(baseMaterial || customMaterial.trim());
+      const isCompatibleMaterial = isMaterialSelected && baseMaterial && !NO_FINISH_MATERIALS.includes(baseMaterial);
+      const isMaterialFinishSelected = isCompatibleMaterial && Boolean(materialFinish);
+      const isPlastificadoTypeSelected = isMaterialFinishSelected && Boolean(plastificadoType);
+
+      const handleFileChange = e => {
+        const newFiles = Array.from(e.target.files || []);
+        const tooBig = newFiles.filter(f => f.size > MAX_FILE_SIZE_BYTES);
+        const okFiles = newFiles.filter(f => f.size <= MAX_FILE_SIZE_BYTES);
+        if (tooBig.length > 0) {
+          toast(`${tooBig.length === 1 ? 'Un archivo pesa' : `${tooBig.length} archivos pesan`} demasiado (máximo ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB) y no se agregaron: ${tooBig.map(f => f.name).join(', ')}`, 'error');
+        }
+        setSelectedFiles(prev => [...prev, ...okFiles]);
+        e.target.value = '';
+      };
+
+      const removeSelectedFile = index => {
+        setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+      };
+
+      const handleProcessSubmit = async shouldPrint => {
+        if (!clientName.trim()) return toast('Por favor ingresa el nombre del cliente', 'error');
+
+        const generatedMaterialsList = [];
+
+        if (baseMaterial) {
+          let matStr = baseMaterial;
+          if (isCompatibleMaterial && materialFinish) matStr += ` ${materialFinish}`;
+          generatedMaterialsList.push(matStr);
+        } else if (customMaterial.trim()) {
+          generatedMaterialsList.push(customMaterial.trim());
+        }
+
+        if (isMaterialFinishSelected && plastificadoType) {
+          let plastStr = `Plastificado ${plastificadoType}`;
+          if (plastificadoFinish) plastStr += ` ${plastificadoFinish}`;
+          generatedMaterialsList.push(plastStr);
+        }
+
+        if (hasCorte) generatedMaterialsList.push('Corte');
+        if (hasTransporte) generatedMaterialsList.push('Transporte');
+        if (customProcess.trim()) generatedMaterialsList.push(customProcess.trim());
+
+        if (generatedMaterialsList.length === 0) {
+          return toast('Por favor selecciona al menos un material o proceso para la comanda.', 'error');
+        }
+
+        setSaving(true);
+        setUploadProgress(selectedFiles.length > 0 ? { loaded: 0, total: selectedFiles.reduce((s, f) => s + f.size, 0) } : null);
+        try {
+          await onSave({
+            clientName,
+            clientPhone,
+            priority,
+            targetWorkshop,
+            printType,
+            materials: generatedMaterialsList,
+            width,
+            height,
+            unit,
+            quantity,
+            finishes: [],
+            usbName,
+            notes,
+            totalCost: totalCost ? parseFloat(totalCost) : '',
+            advancePayment: advancePayment ? parseFloat(advancePayment) : '',
+            pendingBalance
+          }, selectedFiles, shouldPrint, (loaded, total) => setUploadProgress({ loaded, total }));
+        } catch (e) {
+          toast('Ocurrió un error guardando la comanda: ' + e.message, 'error');
+        }
+        setSaving(false);
+        setUploadProgress(null);
+      };
+
+      return (
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 lg:p-8 max-w-4xl mx-auto shadow-sm">
+          <div className="border-b border-slate-100 pb-4 mb-6">
+            <h2 className="text-xl font-black text-slate-900">Nueva Comanda Técnica de Producción</h2>
+            <p className="text-xs text-slate-500">Selecciona las especificaciones requeridas para este trabajo. El número de comanda se asigna al enviar.</p>
+          </div>
+
+          <form onSubmit={e => e.preventDefault()} className="space-y-6 text-xs">
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+              <label className="font-black text-slate-900 block uppercase tracking-wider">🎯 Taller de Destino / Área de Producción *</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                {Object.keys(WORKSHOP_TYPES).map(wsKey => {
+                  const ws = WORKSHOP_TYPES[wsKey];
+                  const isSelected = targetWorkshop === wsKey;
+                  return (
+                    <button type="button" key={wsKey} onClick={() => setTargetWorkshop(wsKey)} className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all ${
+                      isSelected ? 'bg-slate-900 text-white font-black border-slate-900 shadow-md' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                    }`}>
+                      <span className="text-2xl">{ws.icon}</span>
+                      <span className="text-xs">{ws.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {targetWorkshop === 'EXTERNO' && (
+                <p className="text-[11px] text-red-600 font-bold italic pt-1">
+                  🏢 Trabajo Externo: esta comanda NO llegará a la cola de los talleres físicos — queda marcada como lista de inmediato y registrada directo en el Histórico para supervisión.
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1 uppercase">Cliente / Empresa *</label>
+                <input type="text" required placeholder="Ej. Comercializadora Andina" value={clientName} onChange={e => setClientName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-slate-900 outline-none focus:border-red-600 text-sm font-semibold" />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1 uppercase">Teléfono de Contacto</label>
+                <input type="text" placeholder="+57 310 123 4567" value={clientPhone} onChange={e => setClientPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-slate-900 outline-none focus:border-red-600 text-sm" />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1 uppercase">Diseñador / Asesor Activo</label>
+                <input type="text" readOnly value={currentUser.name} className="w-full bg-slate-100 border border-slate-200 rounded-2xl p-3 text-red-600 font-extrabold cursor-not-allowed text-sm" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="font-bold text-slate-700 block mb-2 uppercase">Prioridad de Producción</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {['Baja', 'Normal', 'Alta', 'Urgente'].map(p => (
+                    <button type="button" key={p} onClick={() => setPriority(p)} className={`py-2.5 rounded-2xl border font-bold text-center transition-all ${
+                      priority === p ? (p === 'Urgente' ? 'bg-red-600 text-white border-red-600 animate-pulse font-black shadow-md' : 'bg-slate-900 text-white border-slate-900') : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-2 uppercase">Tecnología de Impresión / Proceso</label>
+                <select value={printType} onChange={e => setPrintType(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-slate-900 font-bold outline-none focus:border-red-600">
+                  <option value="Eco-Solvente">Eco-Solvente (Alta Durabilidad Externa)</option>
+                  <option value="UV Rígidos">UV Rígidos (Acrílico, Trovicel, Policarbonato)</option>
+                  <option value="UV Cama Plana">UV Cama Plana (Alta Resolución)</option>
+                  <option value="Corte Láser CNC">Corte Láser & Grabado CNC</option>
+                  <option value="Sublimación">Sublimación (Textiles y Banderas)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-5">
+              <h3 className="font-black text-slate-900 uppercase tracking-wider text-xs border-b border-slate-200 pb-2">
+                📦 Especificación de Material y Procesos (Paso a Paso)
+              </h3>
+
+              {/* PASO 1 */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-2 text-[11px] uppercase">1. Seleccionar Material Principal / Sustrato:</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                  {BASE_MATERIALS_LIST.map(mat => {
+                    const isSelected = baseMaterial === mat;
+                    return (
+                      <button
+                        type="button"
+                        key={mat}
+                        onClick={() => {
+                          if (isSelected) {
+                            setBaseMaterial('');
+                            setMaterialFinish('');
+                            setPlastificadoType('');
+                            setPlastificadoFinish('');
+                          } else {
+                            setBaseMaterial(mat);
+                            setCustomMaterial('');
+                            setMaterialFinish('');
+                            setPlastificadoType('');
+                            setPlastificadoFinish('');
+                          }
+                        }}
+                        className={`p-2.5 rounded-2xl border text-xs font-bold transition-all text-center ${
+                          isSelected ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        {mat}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    placeholder="¿Otro Material Base? Escríbelo aquí..."
+                    value={customMaterial}
+                    onChange={e => {
+                      setCustomMaterial(e.target.value);
+                      setBaseMaterial('');
+                      setMaterialFinish('');
+                      setPlastificadoType('');
+                      setPlastificadoFinish('');
+                    }}
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 outline-none focus:border-red-600"
+                  />
+                </div>
+              </div>
+
+              {/* PASO 2 */}
+              {isCompatibleMaterial && (
+                <div className="pt-3 border-t border-slate-200/80">
+                  <label className="font-bold text-slate-700 block mb-1.5 text-[11px] uppercase">2. Seleccionar Acabado de {baseMaterial}:</label>
+                  <div className="flex gap-2">
+                    {['Mate', 'Brillante'].map(f => (
+                      <button
+                        type="button"
+                        key={f}
+                        onClick={() => {
+                          if (materialFinish === f) {
+                            setMaterialFinish('');
+                            setPlastificadoType('');
+                            setPlastificadoFinish('');
+                          } else {
+                            setMaterialFinish(f);
+                            setPlastificadoType('');
+                            setPlastificadoFinish('');
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-xl border text-xs font-bold transition-all ${
+                          materialFinish === f ? 'bg-red-600 text-white border-red-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* PASO 3 */}
+              {isMaterialFinishSelected && (
+                <div className="pt-3 border-t border-slate-200/80 space-y-2">
+                  <label className="font-bold text-slate-700 block text-[11px] uppercase">3. Seleccionar Plastificado / Laminado (Opcional):</label>
+
+                  <div className="flex flex-wrap gap-2">
+                    {['Transparente', 'Blanco'].map(pt => (
+                      <button
+                        type="button"
+                        key={pt}
+                        onClick={() => {
+                          if (plastificadoType === pt) {
+                            setPlastificadoType('');
+                            setPlastificadoFinish('');
+                          } else {
+                            setPlastificadoType(pt);
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-xl border text-xs font-bold transition-all ${
+                          plastificadoType === pt ? 'bg-purple-600 text-white border-purple-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        Plastificado {pt}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* PASO 4 */}
+                  {isPlastificadoTypeSelected && (
+                    <div className="p-3 bg-white border border-slate-200 rounded-2xl space-y-2 mt-2">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block">4. Acabado del Plastificado {plastificadoType}:</span>
+                      <div className="flex gap-2">
+                        {['Mate', 'Brillante'].map(pf => (
+                          <button
+                            type="button"
+                            key={pf}
+                            onClick={() => setPlastificadoFinish(plastificadoFinish === pf ? '' : pf)}
+                            className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                              plastificadoFinish === pf ? 'bg-purple-600 text-white border-purple-600' : 'bg-slate-50 border-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {pf}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* PROCESOS ADICIONALES */}
+              <div className="pt-3 border-t border-slate-200/80 space-y-2">
+                <label className="font-bold text-slate-700 block text-[11px] uppercase">Procesos Adicionales / Entrega:</label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHasCorte(!hasCorte)}
+                    className={`px-4 py-2 rounded-xl border text-xs font-bold transition-all ${
+                      hasCorte ? 'bg-purple-600 text-white border-purple-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    ✂️ Corte
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHasTransporte(!hasTransporte)}
+                    className={`px-4 py-2 rounded-xl border text-xs font-bold transition-all ${
+                      hasTransporte ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    🚚 Transporte
+                  </button>
+                </div>
+
+                <input
+                  type="text"
+                  placeholder="¿Otro proceso especial? Escríbelo aquí..."
+                  value={customProcess}
+                  onChange={e => setCustomProcess(e.target.value)}
+                  className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 outline-none focus:border-red-600 mt-1"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-4 items-end">
+              <div>
+                <label className="text-slate-500 block mb-1 font-bold">Ancho (Opcional)</label>
+                <input type="number" step="any" min="0" placeholder="0" value={width} onChange={e => setWidth(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono text-sm font-bold" />
+              </div>
+              <div>
+                <label className="text-slate-500 block mb-1 font-bold">Alto (Opcional)</label>
+                <input type="number" step="any" min="0" placeholder="0" value={height} onChange={e => setHeight(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono text-sm font-bold" />
+              </div>
+              <div>
+                <label className="text-slate-500 block mb-1 font-bold">Unidad</label>
+                <select value={unit} onChange={e => setUnit(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono text-sm font-bold">
+                  <option value="cm">Centímetros (cm)</option>
+                  <option value="m">Metros (m)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-slate-500 block mb-1 font-bold">Cantidad (Piezas)</label>
+                <input type="number" min="1" value={quantity} onChange={e => setQuantity(parseInt(e.target.value, 10) || 1)} className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-red-600 font-black font-mono text-sm" />
+              </div>
+            </div>
+
+            <div>
+              <label className="font-black text-slate-900 block mb-1 uppercase tracking-wider">📎 Archivos de Diseño para Imprimir</label>
+              <p className="text-[10px] text-slate-500 mb-1.5">Sube los archivos finales (PDF, AI, CDR, PSD, JPG...) para que el operario los pueda abrir e imprimir directamente. Puedes seleccionar varios a la vez. Máximo {MAX_FILE_SIZE_BYTES / 1024 / 1024}MB por archivo.</p>
+              <input type="file" multiple onChange={handleFileChange} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-slate-900 text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-900 file:text-white file:text-xs file:font-bold" />
+              {selectedFiles.length > 0 && (
+                <div className="mt-1.5 space-y-1">
+                  {selectedFiles.map((f, i) => (
+                    <p key={i} className="text-[11px] text-emerald-700 font-bold flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1">
+                      <span className="truncate">✓ {f.name} ({(f.size / 1024 / 1024).toFixed(2)} MB)</span>
+                      <button type="button" onClick={() => removeSelectedFile(i)} className="text-red-600 hover:text-red-800 font-black ml-2 shrink-0">✕</button>
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-700 block mb-1 uppercase">Identificación / Nombre de la Memoria USB (opcional)</label>
+              <input type="text" placeholder="Ej. MEMORIA KINGSTON AZUL 16GB" value={usbName} onChange={e => setUsbName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-slate-900 font-mono outline-none focus:border-red-600" />
+            </div>
+
+            <div>
+              <label className="font-black text-slate-900 block mb-1 uppercase tracking-wider">💬 Recuadro para Observaciones / Notas Especiales de Taller</label>
+              <textarea
+                rows={4}
+                placeholder="Instrucciones especiales de corte, empacado, armado o calibres..."
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                className="w-full bg-slate-50 border-2 border-slate-200 focus:border-red-600 rounded-2xl p-3.5 text-slate-900 text-sm outline-none resize-y leading-relaxed font-medium"
+              />
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+              <label className="text-[11px] font-extrabold text-slate-900 uppercase tracking-wider block mb-2">💵 Resumen Financiero (Opcional, solo lo ve MASTER en Histórico)</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Costo Total ($ COP)</label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={totalCost}
+                    onChange={e => setTotalCost(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-mono text-sm text-slate-900 font-bold outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Abono / Anticipo ($ COP)</label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={advancePayment}
+                    onChange={e => setAdvancePayment(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-mono text-sm text-blue-800 font-bold outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Saldo Pendiente</label>
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-sm text-red-600 font-black">
+                    {formatCurrency(pendingBalance)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {saving && uploadProgress && uploadProgress.total > 0 && (
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                <div className="flex justify-between text-[11px] font-bold text-slate-600">
+                  <span>📤 Subiendo archivo(s)...</span>
+                  <span>{Math.min(100, Math.round((uploadProgress.loaded / uploadProgress.total) * 100))}% ({(uploadProgress.loaded / 1024 / 1024).toFixed(1)} / {(uploadProgress.total / 1024 / 1024).toFixed(1)} MB)</span>
+                </div>
+                <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-red-600 transition-all" style={{ width: `${Math.min(100, (uploadProgress.loaded / uploadProgress.total) * 100)}%` }} />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <button type="button" disabled={saving} onClick={() => handleProcessSubmit(false)} className="py-4 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-black rounded-2xl text-sm tracking-wide shadow-md transition-all flex items-center justify-center gap-2">
+                {saving ? <IconSpinner className="w-4 h-4" /> : <><span>ENVIAR A TALLER</span><IconArrowRight /></>}
+              </button>
+
+              <button type="button" disabled={saving} onClick={() => handleProcessSubmit(true)} className="py-4 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-black rounded-2xl text-sm tracking-wide shadow-md transition-all flex items-center justify-center gap-2">
+                {saving ? <IconSpinner className="w-4 h-4" /> : <><IconPrinter /><span>ENVIAR E IMPRIMIR TIQUETE</span></>}
+              </button>
+            </div>
+          </form>
+        </div>
+      );
+    }
+
+    // --- VISTA GESTIÓN USUARIOS ---
+    function UserManagementView({ users, onCreateUser, onToggleUserDisabled, currentUser }) {
+      const toast = useToast();
+      const askConfirm = useConfirm();
+      const [name, setName] = useState('');
+      const [username, setUsername] = useState('');
+      const [password, setPassword] = useState('');
+      const [role, setRole] = useState('DISENO');
+      const [workshopArea, setWorkshopArea] = useState('AMBOS');
+      const [title, setTitle] = useState('');
+      const [creating, setCreating] = useState(false);
+
+      const handleSubmit = async e => {
+        e.preventDefault();
+        if (!name.trim()) return toast('Ingresa el nombre del usuario', 'error');
+        if (!username.trim()) return toast('Ingresa un usuario (sin espacios ni acentos)', 'error');
+        if (password.length < 6) return toast('La contraseña debe tener al menos 6 caracteres', 'error');
+
+        setCreating(true);
+        try {
+          await onCreateUser({
+            name: name.trim(),
+            username: username.trim(),
+            password,
+            role,
+            workshopArea,
+            title: title.trim() || (role === 'DISENO' ? 'Diseñador Gráfico' : role === 'TALLER' ? 'Operario Taller' : 'Master'),
+            avatar: role === 'MASTER' ? '👑' : role === 'DISENO' ? '🎨' : (workshopArea === 'LASER' ? '⚡' : '🖨️')
+          });
+          setName(''); setUsername(''); setPassword(''); setTitle('');
+          toast(`Usuario ${name} creado. Ya puede ingresar con el usuario "${username.trim().toLowerCase()}".`, 'success');
+        } catch (e) {
+          toast('No se pudo crear el usuario: ' + e.message, 'error');
+        }
+        setCreating(false);
+      };
+
+      // "Restablecer acceso": no se puede cambiar la contraseña de otro usuario
+      // ni borrarlo de verdad sin privilegios de administrador de Firebase (eso
+      // requeriría Cloud Functions de pago). Como alternativa sin costo extra,
+      // se deshabilita la cuenta anterior y se deja el formulario listo para
+      // darle a esa persona un usuario y contraseña nuevos.
+      const handleResetUser = async (u) => {
+        const confirmed = await askConfirm(`¿Restablecer el acceso de ${u.name}?\n\nSe deshabilitará su cuenta actual. Luego completa un usuario y contraseña nuevos en el formulario para volver a darle acceso.`);
+        if (!confirmed) return;
+        try {
+          await onToggleUserDisabled(u.uid, true);
+          setName(u.name);
+          setRole(u.role);
+          setWorkshopArea(u.workshopArea || 'AMBOS');
+          setTitle(u.title || '');
+          setUsername('');
+          setPassword('');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          toast(`Cuenta anterior de ${u.name} deshabilitada. Completa un usuario y contraseña nuevos arriba para restablecer su acceso.`, 'info');
+        } catch (e) {
+          toast('No se pudo restablecer el acceso: ' + e.message, 'error');
+        }
+      };
+
+      return (
+        <div className="space-y-6 max-w-4xl mx-auto">
+          <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm">
+            <h2 className="text-xl font-black text-slate-900 mb-1">👥 Administración de Usuarios y Asignación de Talleres</h2>
+            <p className="text-xs text-slate-500">Asigna a qué taller específico pertenece cada operario.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white border border-slate-200 p-6 rounded-3xl space-y-4 shadow-sm">
+              <h3 className="text-sm font-black uppercase text-slate-900 border-b border-slate-100 pb-2">Crear Nuevo Usuario</h3>
+              <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Nombre Completo *</label>
+                  <input type="text" required placeholder="Ej. Jorge Hernández" value={name} onChange={e => setName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 outline-none focus:border-red-600" />
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Cargo / Permisos *</label>
+                  <select value={role} onChange={e => setRole(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 font-bold">
+                    <option value="DISENO">🎨 Diseñador (Crear comandas y ver tablero)</option>
+                    <option value="TALLER">🖨️ Operario de Taller (Procesar comandas)</option>
+                    <option value="MASTER">👑 Supervisión Master (Acceso Total)</option>
+                  </select>
+                </div>
+
+                {role === 'TALLER' && (
+                  <div>
+                    <label className="block text-red-600 font-bold mb-1">Taller Asignado *</label>
+                    <select value={workshopArea} onChange={e => setWorkshopArea(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 font-bold">
+                      <option value="IMPRESION">🖨️ Taller de Impresión Digital</option>
+                      <option value="LASER">⚡ Taller de Corte Láser, Acrílico & MDF</option>
+                      <option value="AMBOS">🔀 Ambos Talleres (Taller General)</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Usuario (sin espacios) *</label>
+                    <input type="text" required placeholder="pedro.martinez" value={username} onChange={e => setUsername(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 font-mono text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Contraseña (mín. 6) *</label>
+                    <input type="text" required placeholder="••••••" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-red-600 font-mono font-black text-sm" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Título / Especialidad</label>
+                  <input type="text" placeholder="Ej. Operario Láser" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900" />
+                </div>
+
+                <button type="submit" disabled={creating} className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-black rounded-2xl text-xs tracking-wide shadow-md transition-all mt-2 flex items-center justify-center gap-2">
+                  {creating ? <IconSpinner className="w-4 h-4" /> : 'REGISTRAR USUARIO'}
+                </button>
+              </form>
+            </div>
+
+            <div className="bg-white border border-slate-200 p-6 rounded-3xl space-y-4 shadow-sm">
+              <h3 className="text-sm font-black uppercase text-slate-900 border-b border-slate-100 pb-2">Usuarios Activos ({users.length})</h3>
+              <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                {users.map(u => (
+                  <div key={u.uid} className={`p-3.5 bg-slate-50 border rounded-2xl flex items-center justify-between ${u.disabled ? 'border-red-200 opacity-60' : 'border-slate-200'}`}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{u.avatar}</span>
+                      <div>
+                        <div className="font-bold text-xs text-slate-900">{u.name} {u.disabled && <span className="text-red-600">(Deshabilitado)</span>}</div>
+                        <div className="text-[10px] text-slate-500">{u.title} • <span className="text-red-600 font-mono font-bold">@{u.username}</span></div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg bg-white text-slate-700 border border-slate-200">{u.workshopArea || u.role}</span>
+                      {u.uid !== currentUser.uid && (
+                        <>
+                          <button onClick={() => handleResetUser(u)} className="p-1.5 rounded-xl transition-all text-amber-600 hover:bg-amber-100" title="Restablecer acceso (usuario y contraseña nuevos)">
+                            <IconRefreshCw />
+                          </button>
+                          <button onClick={() => onToggleUserDisabled(u.uid, !u.disabled)} className={`p-1.5 rounded-xl transition-all ${u.disabled ? 'text-emerald-600 hover:bg-emerald-100' : 'text-red-600 hover:bg-red-100'}`} title={u.disabled ? 'Habilitar acceso' : 'Deshabilitar acceso'}>
+                            {u.disabled ? <IconCheckCircle /> : <IconLock />}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- MODAL REPORTE DE CONSUMO DE MATERIAL ---
+    // La imagen pegada del portapapeles se comprime en canvas y se sube al mismo
+    // servidor Hostinger que los adjuntos de diseño (no se guarda base64 en Firestore
+    // para no arriesgar el límite de 1MB por documento).
+    function MaterialReportModal({ order, type, onClose, onSave }) {
+      const toast = useToast();
+      const isPrint = type === 'IMPRESION';
+      const initialText = isPrint ? (order.printMaterialReportText || '') : (order.laserMaterialReportText || '');
+      const initialImgUrl = isPrint ? (order.printMaterialReportImg || '') : (order.laserMaterialReportImg || '');
+
+      const [reportText, setReportText] = useState(initialText);
+      const [previewUrl, setPreviewUrl] = useState(initialImgUrl);
+      const [pendingBlob, setPendingBlob] = useState(null);
+      const [imageRemoved, setImageRemoved] = useState(false);
+      const [saving, setSaving] = useState(false);
+
+      const compressAndPreview = (file) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let maxW = 800;
+            let scale = maxW / img.width;
+            if (scale > 1) scale = 1;
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob((blob) => {
+              setPendingBlob(blob);
+              setPreviewUrl(canvas.toDataURL('image/jpeg', 0.7));
+              setImageRemoved(false);
+            }, 'image/jpeg', 0.7);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      };
+
+      const handlePaste = (e) => {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.kind === 'file' && item.type.indexOf('image') !== -1) {
+            compressAndPreview(item.getAsFile());
+            break;
+          }
+        }
+      };
+
+      const handleRemoveImage = () => {
+        setPreviewUrl('');
+        setPendingBlob(null);
+        setImageRemoved(true);
+      };
+
+      const handleSave = async () => {
+        setSaving(true);
+        try {
+          let finalImgUrl = imageRemoved ? '' : initialImgUrl;
+          if (pendingBlob) {
+            const file = new File([pendingBlob], `consumo-${type.toLowerCase()}-${Date.now()}.jpg`, { type: 'image/jpeg' });
+            const uploaded = await uploadFileToHostinger(file, order.docId);
+            finalImgUrl = uploaded.url;
+          }
+          await onSave(reportText, finalImgUrl);
+        } catch (e) {
+          toast('No se pudo guardar el reporte: ' + e.message, 'error');
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden p-6 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-black text-slate-900 text-sm">
+                📝 Reporte Consumo Material {isPrint ? '🖨️ Impresión' : '⚡ Corte Láser'} ({order.id})
+              </h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-900"><IconX /></button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Escribe tus notas y presiona <strong className="text-slate-900 font-mono bg-slate-100 px-1 py-0.5 rounded border border-slate-200">Ctrl + V</strong> (o Cmd+V) dentro del cuadro para pegar una captura de pantalla del portapapeles.
+            </p>
+
+            <div className="space-y-3">
+              <textarea
+                rows={4}
+                onPaste={handlePaste}
+                placeholder="Escribe aquí y/o presiona Ctrl+V para pegar la captura..."
+                value={reportText}
+                onChange={e => setReportText(e.target.value)}
+                className={`w-full bg-slate-50 border-2 border-slate-200 rounded-2xl p-3.5 text-xs text-slate-900 font-mono outline-none ${isPrint ? 'focus:border-blue-600' : 'focus:border-purple-600'}`}
+              />
+
+              {previewUrl && (
+                <div className="relative p-2 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">📷 Captura {pendingBlob ? '(nueva, se sube al guardar)' : 'guardada'}:</span>
+                    <button type="button" onClick={handleRemoveImage} className="text-red-600 hover:text-red-800 text-[10px] font-bold underline">
+                      Quitar Imagen
+                    </button>
+                  </div>
+                  <img src={previewUrl} alt="Captura Pegada" className="w-full max-h-48 object-contain rounded-xl border border-slate-300 bg-white" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button onClick={onClose} disabled={saving} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold disabled:opacity-60">Cancelar</button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className={`px-5 py-2 text-white font-black rounded-xl text-xs shadow-md disabled:opacity-60 flex items-center gap-2 ${isPrint ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+              >
+                {saving ? <IconSpinner className="w-4 h-4" /> : <span>Guardar Reporte</span>}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- MODAL IMPRESIÓN TIQUETE ---
+    function TicketModal({ order, onClose }) {
+      const wsInfo = WORKSHOP_TYPES[order.targetWorkshop || 'IMPRESION'];
+      return (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+              <div className="flex items-center gap-2 text-slate-900 font-black text-sm">
+                <IconPrinter /> <span>Tiquete de Producción</span>
+              </div>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-900"><IconX /></button>
+            </div>
+
+            <div className="p-6 overflow-y-auto bg-slate-100 flex justify-center">
+              <div id="printable-ticket" className="bg-white text-black p-6 font-mono text-xs rounded-xl shadow-md space-y-4 w-full max-w-xs border border-slate-200">
+                <div className="text-center border-b border-dashed border-slate-400 pb-3">
+                  <div className="font-black text-sm uppercase">EL BIGOTE DE MI PRIMA ®</div>
+                  <p className="text-[10px] text-slate-600">Taller Gráfico & Impresión Digital</p>
+                  <div className="mt-1 text-xs font-bold uppercase underline">{wsInfo.label}</div>
+                  <div className="mt-2 text-2xl font-black font-mono bg-black text-white py-1 rounded-lg">
+                    {order.id}
+                  </div>
+                </div>
+
+                <div className="space-y-1 text-[11px]">
+                  <div><strong>Fecha:</strong> {order.createdAt}</div>
+                  <div><strong>Cliente:</strong> {order.clientName}</div>
+                  <div><strong>Teléfono:</strong> {order.clientPhone || 'N/A'}</div>
+                  <div><strong>Diseñador:</strong> {order.designerName}</div>
+                  <div><strong>Prioridad:</strong> {order.priority.toUpperCase()}</div>
+                </div>
+
+                <div className="border-t border-dashed border-slate-400 pt-2 space-y-1.5 text-[11px]">
+                  <div><strong>Proceso/Tecnología:</strong> {order.printType}</div>
+                  <div><strong>Medidas:</strong> {order.width || '-'} x {order.height || '-'} {order.unit}</div>
+                  <div><strong>Cantidad:</strong> {order.quantity} Pieza(s)</div>
+
+                  {order.usbName && (
+                    <div className="bg-slate-100 p-1.5 rounded-lg font-bold border border-slate-300">
+                      💾 USB: {order.usbName}
+                    </div>
+                  )}
+
+                  {getOrderFiles(order).length > 0 && (
+                    <div className="bg-slate-100 p-1.5 rounded-lg font-bold border border-slate-300">
+                      📎 {getOrderFiles(order).length === 1 ? 'Archivo' : `Archivos (${getOrderFiles(order).length})`}: {getOrderFiles(order).map(f => f.name).join(', ')} (disponibles en el sistema digital)
+                    </div>
+                  )}
+
+                  {order.materials.length > 0 && (
+                    <div>
+                      <strong>Materiales:</strong>
+                      <ul className="list-disc pl-4">
+                        {order.materials.map(m => <li key={m}>{m}</li>)}
+                      </ul>
+                    </div>
+                  )}
+
+                  {order.finishes.length > 0 && (
+                    <div>
+                      <strong>Acabados:</strong>
+                      <ul className="list-square pl-4">
+                        {order.finishes.map(f => <li key={f}>[  ] {f}</li>)}
+                      </ul>
+                    </div>
+                  )}
+
+                  {order.notes && (
+                    <div className="pt-2 border-t border-slate-300 italic">
+                      <strong>Notas:</strong> {order.notes}
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-6 grid grid-cols-2 gap-4 text-center text-[9px]">
+                  <div className="border-t border-black pt-1">Firma Recepción</div>
+                  <div className="border-t border-black pt-1">Firma Entrega</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-white border-t border-slate-200 flex justify-end gap-3">
+              <button onClick={onClose} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold">Cerrar</button>
+              <button onClick={() => window.print()} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-md">
+                <IconPrinter /> <span>IMPRIMIR TIQUETE</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <ToastProvider>
+        <ConfirmProvider>
+          <App />
+        </ConfirmProvider>
+      </ToastProvider>
+    );
+  </script>
+</body>
+</html>

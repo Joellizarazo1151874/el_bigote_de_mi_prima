@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "comandas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "targetWorkshop", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "comandas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "timestamp", "order": "DESCENDING" },
+        { "fieldPath": "targetWorkshop", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

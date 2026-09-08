@@ -1,0 +1,2077 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>El Bigote de Mi Prima - Sistema Multi-Taller</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & React DOM CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Babel CDN -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    
+    @media print {
+      body * { visibility: hidden; }
+      #printable-ticket, #printable-ticket * { visibility: visible; }
+      #printable-ticket { position: absolute; left: 0; top: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen selection:bg-red-500 selection:text-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // --- LOGO OFICIAL ---
+    const BrandLogo = ({ variant = 'full', className = '' }) => {
+      const [imgError, setImgError] = useState(false);
+
+      if (!imgError) {
+        return (
+          <img 
+            src="logo.png" 
+            alt="El Bigote de Mi Prima" 
+            onError={() => setImgError(true)} 
+            className={variant === 'header' ? 'h-10 w-auto object-contain' : 'h-32 w-auto object-contain mx-auto drop-shadow-sm'} 
+          />
+        );
+      }
+
+      if (variant === 'header') {
+        return (
+          <div className="flex items-center gap-2 select-none">
+            <svg className="w-9 h-8" viewBox="0 0 200 130" fill="none">
+              <path d="M20 60 C 40 25, 80 25, 100 45 C 120 25, 160 25, 180 60 C 190 90, 140 115, 100 115 C 60 115, 10 90, 20 60 Z" fill="#DC2626" />
+              <path d="M25 62 Q 100 78 175 62 Q 100 100 25 62 Z" fill="#991B1B" />
+              <path d="M90 38 Q 110 38 125 45 Q 110 42 90 38 Z" fill="#FFFFFF" opacity="0.8" />
+              <path d="M5 52 C 25 15, 70 12, 100 32 C 130 12, 175 15, 195 52 C 170 35, 30 35, 5 52 Z" fill="#0F172A" />
+            </svg>
+            <div className="leading-none text-left font-black">
+              <div className="text-xs font-black tracking-widest text-slate-900 flex items-center gap-1">
+                <span className="text-[9px] text-red-600 font-extrabold uppercase [writing-mode:vertical-lr] rotate-180">EL</span>
+                <span>BIGOT<span className="inline-block transform scale-x-[-1]">E</span></span>
+              </div>
+              <div className="text-base font-black text-red-600 tracking-tight">PRIMA <span className="text-[8px] border border-red-600 rounded-full px-0.5">R</span></div>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className={`flex flex-col items-center select-none ${className}`}>
+          <svg className="w-48 h-auto drop-shadow-sm" viewBox="0 0 200 130" fill="none">
+            <path d="M20 60 C 40 25, 80 25, 100 45 C 120 25, 160 25, 180 60 C 190 90, 140 115, 100 115 C 60 115, 10 90, 20 60 Z" fill="#DC2626" />
+            <path d="M25 62 Q 100 78 175 62 Q 100 100 25 62 Z" fill="#991B1B" />
+            <path d="M90 38 Q 110 38 125 45 Q 110 42 90 38 Z" fill="#FFFFFF" opacity="0.8" />
+            <path d="M5 52 C 25 15, 70 12, 100 32 C 130 12, 175 15, 195 52 C 170 35, 30 35, 5 52 Z" fill="#0F172A" />
+          </svg>
+          
+          <div className="text-center font-black tracking-tight leading-none text-slate-900 mt-2">
+            <div className="flex items-center justify-center gap-1">
+              <span className="text-[10px] font-extrabold uppercase [writing-mode:vertical-lr] rotate-180 text-red-600">EL</span>
+              <span className="text-3xl font-black tracking-widest text-slate-900">BIGOT<span className="inline-block transform scale-x-[-1]">E</span></span>
+              <div className="flex flex-col text-[9px] font-black leading-tight text-red-600 text-left">
+                <span>D<span className="inline-block transform scale-x-[-1]">E</span></span>
+                <span>MI</span>
+              </div>
+            </div>
+            <div className="text-4xl font-black tracking-tighter text-red-600 flex items-center justify-center gap-1 mt-0.5">
+              <span>PRIMA</span>
+              <span className="text-[10px] font-bold border border-red-600 rounded-full w-4 h-4 flex items-center justify-center -mt-3 text-red-600">R</span>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // --- ICONOS SVG ---
+    const IconPrinter = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>;
+    const IconPlus = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+    const IconLogOut = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+    const IconGrid = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
+    const IconUsers = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+    const IconCalendar = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+    const IconArrowRight = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>;
+    const IconX = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+    const IconUsb = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 2v8"/><path d="m16 6-4-4-4 4"/><rect x="8" y="10" width="8" height="10" rx="1"/><path d="M10 20v2"/><path d="M14 20v2"/></svg>;
+    const IconTrash = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
+    const IconLock = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+    const IconCheckCircle = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
+    const IconDollar = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
+
+    // BADGE DE PRIORIDAD
+    const getPriorityBadgeClass = (priority) => {
+      if (priority === 'Urgente') {
+        return 'bg-red-600 text-white border-red-700 animate-pulse font-black shadow-md shadow-red-500/30 ring-2 ring-red-400 uppercase tracking-wider';
+      }
+      if (priority === 'Alta') {
+        return 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
+      }
+      if (priority === 'Baja') {
+        return 'bg-slate-100 text-slate-600 border-slate-300';
+      }
+      return 'bg-slate-100 text-slate-800 border-slate-300';
+    };
+
+    const WORKSHOP_TYPES = {
+      IMPRESION: { label: 'Taller Impresión Digital', icon: '🖨️', badgeColor: 'bg-blue-100 text-blue-900 border-blue-300' },
+      LASER: { label: 'Taller Corte Láser & Acrílico', icon: '⚡', badgeColor: 'bg-purple-100 text-purple-900 border-purple-300' },
+      AMBOS: { label: 'Trabajo Mixto (Ambos Talleres)', icon: '🔀', badgeColor: 'bg-amber-100 text-amber-900 border-amber-300' },
+      EXTERNO: { label: 'Trabajo Externo / Por Fuera', icon: '🏢', badgeColor: 'bg-slate-800 text-white border-slate-900' }
+    };
+
+    const PAYMENT_STATUS_OPTIONS = {
+      PENDIENTE: { label: '⏳ Pendiente', class: 'bg-amber-100 text-amber-900 border-amber-300' },
+      PAGO: { label: '✅ PAGO', class: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
+      FACTURADO_SIN_PAGO: { label: '📄 Facturado Sin Pago', class: 'bg-purple-100 text-purple-900 border-purple-300' },
+      TABULACION_INTERNA: { label: '📋 Tabulación Interna', class: 'bg-blue-100 text-blue-900 border-blue-300' }
+    };
+
+    const INITIAL_USERS = [
+      { id: 'usr-master', name: 'Supervisión Master', pin: '8888', role: 'MASTER', workshopArea: 'AMBOS', title: 'Administrador General', avatar: '👑' },
+      { id: 'usr-1', name: 'Carlos Ruiz', pin: '1001', role: 'DISENO', workshopArea: 'AMBOS', title: 'Diseñador Senior', avatar: '🎨' },
+      { id: 'usr-2', name: 'Ana Gómez', pin: '1002', role: 'DISENO', workshopArea: 'AMBOS', title: 'Diseñadora Creativa', avatar: '🎨' },
+      { id: 'usr-3', name: 'Pedro Martínez', pin: '5555', role: 'TALLER', workshopArea: 'IMPRESION', title: 'Operario Impresión Digital', avatar: '🖨️' },
+      { id: 'usr-4', name: 'Jorge Hernández', pin: '7777', role: 'TALLER', workshopArea: 'LASER', title: 'Operario Corte Láser / Acrílico', avatar: '⚡' }
+    ];
+
+    const BASE_MATERIALS_LIST = [
+      'Lona',
+      'Panaflex',
+      'Microperforado',
+      'Vinilo Blanco',
+      'Vinilo Transparente',
+      'Vinilo de Corte',
+      'Esmerilado',
+      'PVC',
+      'Acrílico'
+    ];
+
+    const NO_FINISH_MATERIALS = ['Microperforado', 'Esmerilado', 'PVC', 'Acrílico'];
+
+    const STATUS_FLOW = {
+      EN_ESPERA: { label: '1. En Espera de Recibir', next: 'EN_PRODUCCION', nextLabel: '📥 Aceptar en Producción', color: 'bg-amber-50 text-amber-900 border-amber-300' },
+      EN_PRODUCCION: { label: '2. En Producción', next: 'LISTO', nextLabel: '✅ Marcar como Listo / Finalizar', color: 'bg-blue-50 text-blue-900 border-blue-300' },
+      LISTO: { label: '3. Listo / Terminado', color: 'bg-emerald-50 text-emerald-900 border-emerald-300' }
+    };
+
+    const INITIAL_ORDERS = [
+      {
+        id: '#CMD-1088',
+        createdAt: new Date().toLocaleString('es-CO'),
+        timestamp: Date.now(),
+        clientName: 'Restaurante El Sabor Real',
+        clientPhone: '+57 310 555 0192',
+        designerName: 'Carlos Ruiz',
+        targetWorkshop: 'IMPRESION',
+        statusImpresion: 'EN_PRODUCCION',
+        statusLaser: 'EN_ESPERA',
+        acceptedByImpresion: 'Pedro Martínez',
+        completedByImpresion: null,
+        acceptedByLaser: null,
+        completedByLaser: null,
+        priority: 'Urgente',
+        materials: ['Lona Mate', 'Plastificado Transparente Mate', 'Corte'],
+        customMaterial: '',
+        width: 300,
+        height: 150,
+        unit: 'cm',
+        quantity: 2,
+        usbName: 'MEMORIA KINGSTON AZUL 16GB',
+        notes: 'Reforzar esquinas con doble cinta.',
+        printMaterialReportText: 'Gastados 3.5m Lona Mate',
+        printMaterialReportImg: '',
+        laserMaterialReportText: '',
+        laserMaterialReportImg: '',
+        paymentStatus: 'PENDIENTE',
+        status: 'EN_PRODUCCION'
+      },
+      {
+        id: '#CMD-1089',
+        createdAt: new Date().toLocaleString('es-CO'),
+        timestamp: Date.now() - 3600000 * 2,
+        clientName: 'Dra. María Fernanda López',
+        clientPhone: '+57 300 888 4433',
+        designerName: 'Ana Gómez',
+        targetWorkshop: 'LASER',
+        statusImpresion: 'EN_ESPERA',
+        statusLaser: 'EN_ESPERA',
+        acceptedByImpresion: null,
+        completedByImpresion: null,
+        acceptedByLaser: null,
+        completedByLaser: null,
+        priority: 'Alta',
+        materials: ['Acrílico', 'Corte'],
+        customMaterial: '',
+        width: 120,
+        height: 80,
+        unit: 'cm',
+        quantity: 1,
+        usbName: 'MEMORIA SANDISK ROJA',
+        notes: 'Acrílico de 5mm con cantos pulidos.',
+        printMaterialReportText: '',
+        printMaterialReportImg: '',
+        laserMaterialReportText: 'Se utilizó 1/2 lámina de Acrílico Cristal 5mm',
+        laserMaterialReportImg: '',
+        paymentStatus: 'PAGO',
+        status: 'EN_ESPERA'
+      }
+    ];
+
+    const playChimeSound = () => {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const playTone = (freq, delay) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+          gain.gain.setValueAtTime(0.2, ctx.currentTime + delay);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.5);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + delay);
+          osc.stop(ctx.currentTime + delay + 0.5);
+        };
+        playTone(587.33, 0);
+        playTone(880.0, 0.15);
+      } catch (e) {}
+    };
+
+    const formatCurrency = val => {
+      if (!val || isNaN(val)) return '$0';
+      return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(val);
+    };
+
+    // --- COMPONENTE PRINCIPAL ---
+    function App() {
+      const [users, setUsers] = useState(() => JSON.parse(localStorage.getItem('ebmp_users_v6')) || INITIAL_USERS);
+      const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('ebmp_user_v6')) || null);
+      const [orders, setOrders] = useState(() => JSON.parse(localStorage.getItem('ebmp_orders_v6')) || INITIAL_ORDERS);
+      
+      const [selectedUserId, setSelectedUserId] = useState(() => users[0]?.id || '');
+      const [pinInput, setPinInput] = useState('');
+      const [authError, setAuthError] = useState(false);
+      const [activeTab, setActiveTab] = useState('KANBAN');
+      const [selectedWorkshopFilter, setSelectedWorkshopFilter] = useState('TODOS');
+      const [searchTerm, setSearchTerm] = useState('');
+      const [ticketModalOrder, setTicketModalOrder] = useState(null);
+      const [showCompletedWorkshopSection, setShowCompletedWorkshopSection] = useState(false);
+      
+      // MODAL REPORTE DUAL (CON PEGADO DE CAPTURA)
+      const [materialReportModal, setMaterialReportModal] = useState(null);
+      const [nextCmdSeq, setNextCmdSeq] = useState(() => parseInt(localStorage.getItem('ebmp_cmd_seq') || '1090', 10));
+
+      useEffect(() => { localStorage.setItem('ebmp_users_v6', JSON.stringify(users)); }, [users]);
+      useEffect(() => { localStorage.setItem('ebmp_orders_v6', JSON.stringify(orders)); }, [orders]);
+      useEffect(() => {
+        if (currentUser) {
+          localStorage.setItem('ebmp_user_v6', JSON.stringify(currentUser));
+          if (currentUser.role === 'DISENO') setActiveTab('CREAR');
+          else if (currentUser.role === 'TALLER') {
+            setActiveTab('TALLER');
+            if (currentUser.workshopArea) setSelectedWorkshopFilter(currentUser.workshopArea);
+          } else setActiveTab('KANBAN');
+        } else {
+          localStorage.removeItem('ebmp_user_v6');
+        }
+      }, [currentUser]);
+
+      // Teclado físico
+      useEffect(() => {
+        if (currentUser) return;
+        const handleKeyDown = e => {
+          if (e.key >= '0' && e.key <= '9') {
+            if (pinInput.length < 4) { setPinInput(p => p + e.key); setAuthError(false); }
+          } else if (e.key === 'Backspace') {
+            setPinInput(p => p.slice(0, -1)); setAuthError(false);
+          } else if (e.key === 'Escape') {
+            setPinInput(''); setAuthError(false);
+          }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [currentUser, pinInput]);
+
+      // Auto-verificación PIN
+      useEffect(() => {
+        if (!currentUser && pinInput.length === 4) {
+          const userObj = users.find(u => u.id === selectedUserId);
+          if (userObj && userObj.pin === pinInput) {
+            setCurrentUser(userObj);
+            setPinInput('');
+            setAuthError(false);
+          } else {
+            setAuthError(true);
+            setTimeout(() => setPinInput(''), 600);
+          }
+        }
+      }, [pinInput, currentUser, selectedUserId, users]);
+
+      const handleAdvanceStatus = (id, targetAreaOverride = null) => {
+        setOrders(prev => prev.map(o => {
+          if (o.id === id) {
+            let activeArea = targetAreaOverride;
+            if (!activeArea) {
+              activeArea = currentUser.workshopArea === 'LASER' ? 'LASER' : 'IMPRESION';
+            }
+
+            let newStImp = o.statusImpresion || o.status;
+            let newStLas = o.statusLaser || o.status;
+            let accImp = o.acceptedByImpresion || o.acceptedBy;
+            let compImp = o.completedByImpresion || o.completedBy;
+            let accLas = o.acceptedByLaser || o.acceptedBy;
+            let compLas = o.completedByLaser || o.completedBy;
+
+            if (o.targetWorkshop === 'AMBOS') {
+              if (activeArea === 'IMPRESION') {
+                if (newStImp === 'EN_ESPERA') { newStImp = 'EN_PRODUCCION'; accImp = currentUser.name; }
+                else if (newStImp === 'EN_PRODUCCION') { newStImp = 'LISTO'; compImp = currentUser.name; }
+              } else if (activeArea === 'LASER') {
+                if (newStLas === 'EN_ESPERA') { newStLas = 'EN_PRODUCCION'; accLas = currentUser.name; }
+                else if (newStLas === 'EN_PRODUCCION') { newStLas = 'LISTO'; compLas = currentUser.name; }
+              }
+
+              let globalSt = 'EN_PRODUCCION';
+              if (newStImp === 'LISTO' && newStLas === 'LISTO') globalSt = 'LISTO';
+              else if (newStImp === 'EN_ESPERA' && newStLas === 'EN_ESPERA') globalSt = 'EN_ESPERA';
+
+              return {
+                ...o,
+                statusImpresion: newStImp,
+                statusLaser: newStLas,
+                acceptedByImpresion: accImp,
+                completedByImpresion: compImp,
+                acceptedByLaser: accLas,
+                completedByLaser: compLas,
+                status: globalSt
+              };
+            } else {
+              let nextSt = o.status === 'EN_ESPERA' ? 'EN_PRODUCCION' : 'LISTO';
+              let acc = o.status === 'EN_ESPERA' ? currentUser.name : o.acceptedBy;
+              let comp = o.status === 'EN_PRODUCCION' ? currentUser.name : o.completedBy;
+
+              return {
+                ...o,
+                status: nextSt,
+                acceptedBy: acc,
+                completedBy: comp,
+                statusImpresion: nextSt,
+                statusLaser: nextSt
+              };
+            }
+          }
+          return o;
+        }));
+      };
+
+      // GUARDAR REPORTE DE CONSUMO DUAL (TEXTO E IMAGEN PEGADA)
+      const handleSaveMaterialReport = (id, reportText, reportImg, type) => {
+        setOrders(prev => prev.map(o => {
+          if (o.id === id) {
+            if (type === 'IMPRESION') return { ...o, printMaterialReportText: reportText, printMaterialReportImg: reportImg };
+            if (type === 'LASER') return { ...o, laserMaterialReportText: reportText, laserMaterialReportImg: reportImg };
+          }
+          return o;
+        }));
+      };
+
+      const handleUpdatePaymentStatus = (id, newPaymentStatus) => {
+        setOrders(prev => prev.map(o => o.id === id ? { ...o, paymentStatus: newPaymentStatus } : o));
+      };
+
+      const handleDeleteOrder = id => {
+        if (currentUser?.role !== 'MASTER') return alert('Acceso denegado: Solo usuarios MASTER pueden borrar.');
+        if (window.confirm(`⚠️ ¿Estás seguro de ELIMINAR definitivamente la comanda ${id}?`)) {
+          setOrders(prev => prev.filter(o => o.id !== id));
+        }
+      };
+
+      const handleSaveNewOrder = (newOrderData, shouldPrint = false) => {
+        const newCmdId = `#CMD-${nextCmdSeq}`;
+        setNextCmdSeq(s => s + 1);
+        localStorage.setItem('ebmp_cmd_seq', (nextCmdSeq + 1).toString());
+
+        const isExternal = newOrderData.targetWorkshop === 'EXTERNO';
+
+        const created = {
+          ...newOrderData,
+          id: newCmdId,
+          createdAt: new Date().toLocaleString('es-CO'),
+          timestamp: Date.now(),
+          designerName: currentUser.name,
+          statusImpresion: isExternal ? 'LISTO' : 'EN_ESPERA',
+          statusLaser: isExternal ? 'LISTO' : 'EN_ESPERA',
+          acceptedByImpresion: null,
+          completedByImpresion: null,
+          acceptedByLaser: null,
+          completedByLaser: null,
+          acceptedBy: isExternal ? 'Trabajo Externo' : null,
+          completedBy: isExternal ? 'Trabajo Externo' : null,
+          printMaterialReportText: '',
+          printMaterialReportImg: '',
+          laserMaterialReportText: '',
+          laserMaterialReportImg: '',
+          paymentStatus: 'PENDIENTE',
+          status: isExternal ? 'LISTO' : 'EN_ESPERA'
+        };
+
+        setOrders(prev => [created, ...prev]);
+        playChimeSound();
+
+        if (shouldPrint) setTicketModalOrder(created);
+
+        if (isExternal) {
+          alert(`🏢 Comanda ${newCmdId} enviada como TRABAJO EXTERNO. Registrada directamente en el Histórico.`);
+          setActiveTab(currentUser.role === 'MASTER' ? 'HISTORIAL' : 'CREAR');
+        } else {
+          setActiveTab(currentUser.role === 'TALLER' ? 'TALLER' : 'KANBAN');
+        }
+      };
+
+      const handleCreateUser = newUserObj => setUsers(prev => [...prev, newUserObj]);
+      const handleDeleteUser = userId => {
+        if (users.length <= 1) return alert('Debe existir al menos un usuario.');
+        setUsers(prev => prev.filter(u => u.id !== userId));
+      };
+
+      const isOrderVisibleForUser = (order) => {
+        if (order.targetWorkshop === 'EXTERNO') {
+          return currentUser.role === 'MASTER';
+        }
+
+        if (currentUser.role === 'MASTER' || currentUser.workshopArea === 'AMBOS' || currentUser.role === 'DISENO') {
+          return true;
+        }
+        return order.targetWorkshop === currentUser.workshopArea || order.targetWorkshop === 'AMBOS';
+      };
+
+      // --- PANTALLA LOGIN ---
+      if (!currentUser) {
+        const activeUserObj = users.find(u => u.id === selectedUserId) || users[0];
+        return (
+          <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
+            <div className="w-full max-w-4xl bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
+              <div className="p-8 bg-slate-50/80 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col justify-between">
+                <div>
+                  <div className="mb-6">
+                    <BrandLogo />
+                  </div>
+
+                  <label className="text-xs font-extrabold text-slate-500 uppercase tracking-wider block mb-3">Selecciona tu Usuario</label>
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                    {users.map(u => (
+                      <button
+                        key={u.id}
+                        onClick={() => { setSelectedUserId(u.id); setPinInput(''); setAuthError(false); }}
+                        className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-center justify-between ${
+                          selectedUserId === u.id 
+                            ? 'bg-white border-red-600 text-slate-900 shadow-md ring-2 ring-red-500/20' 
+                            : 'bg-white/60 border-slate-200 text-slate-700 hover:bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{u.avatar || '👤'}</span>
+                          <div>
+                            <div className="font-bold text-sm text-slate-900">{u.name}</div>
+                            <div className="text-xs text-slate-500">{u.title}</div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 border border-slate-200">{u.workshopArea || u.role}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-8 bg-white flex flex-col justify-center items-center">
+                <div className="w-full max-w-xs text-center space-y-6">
+                  <div>
+                    <div className="text-4xl mb-2">{activeUserObj?.avatar || '👤'}</div>
+                    <h2 className="text-lg font-black text-slate-900">{activeUserObj?.name}</h2>
+                    <p className="text-xs text-red-600 font-bold">Ingresa tu PIN de 4 dígitos</p>
+                  </div>
+
+                  <div className="flex justify-center gap-3 my-4">
+                    {[0, 1, 2, 3].map(i => (
+                      <div key={i} className={`w-12 h-14 rounded-2xl border-2 flex items-center justify-center text-2xl font-bold font-mono transition-all ${
+                        authError ? 'border-red-600 bg-red-50 text-red-600 animate-bounce' :
+                        pinInput.length > i ? 'border-slate-900 bg-slate-900 text-white shadow-md' : 'border-slate-200 bg-slate-50 text-slate-300'
+                      }`}>
+                        {pinInput.length > i ? '•' : ''}
+                      </div>
+                    ))}
+                  </div>
+
+                  {authError && <p className="text-xs text-red-600 font-extrabold animate-pulse">⚠️ PIN incorrecto</p>}
+
+                  <div className="grid grid-cols-3 gap-3">
+                    {['1','2','3','4','5','6','7','8','9'].map(num => (
+                      <button key={num} onClick={() => pinInput.length < 4 && setPinInput(p => p + num)} className="h-12 rounded-2xl bg-slate-100 border border-slate-200/80 font-mono text-xl font-bold text-slate-800 hover:bg-slate-900 hover:text-white transition-all shadow-sm">{num}</button>
+                    ))}
+                    <button onClick={() => setPinInput('')} className="h-12 rounded-2xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-500 hover:bg-slate-200">BORRAR</button>
+                    <button onClick={() => pinInput.length < 4 && setPinInput(p => p + '0')} className="h-12 rounded-2xl bg-slate-100 border border-slate-200/80 font-mono text-xl font-bold text-slate-800 hover:bg-slate-900 hover:text-white transition-all shadow-sm">0</button>
+                    <button onClick={() => setPinInput(p => p.slice(0, -1))} className="h-12 rounded-2xl bg-slate-100 border border-slate-200 text-red-600 font-black hover:bg-red-50">⌫</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // --- MAIN APP VIEW ---
+      return (
+        <div className="min-h-screen flex flex-col">
+          <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-6 py-3 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3">
+              <BrandLogo variant="header" />
+            </div>
+
+            <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+              {(currentUser.role === 'MASTER' || currentUser.role === 'DISENO') && (
+                <button onClick={() => setActiveTab('CREAR')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'CREAR' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}>
+                  <IconPlus /> <span>Nueva Comanda</span>
+                </button>
+              )}
+              {(currentUser.role === 'MASTER' || currentUser.role === 'DISENO') && (
+                <button onClick={() => setActiveTab('KANBAN')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'KANBAN' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}>
+                  <IconGrid /> <span>Tablero General</span>
+                </button>
+              )}
+              {(currentUser.role === 'MASTER' || currentUser.role === 'TALLER') && (
+                <button onClick={() => setActiveTab('TALLER')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'TALLER' ? 'bg-red-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}>
+                  <IconPrinter /> <span>Cola Taller</span>
+                  <span className="ml-1 px-2 py-0.5 bg-white text-red-600 font-mono text-[10px] rounded-full font-black">
+                    {orders.filter(o => o.status !== 'LISTO' && o.targetWorkshop !== 'EXTERNO' && isOrderVisibleForUser(o)).length}
+                  </span>
+                </button>
+              )}
+              {currentUser.role === 'MASTER' && (
+                <button onClick={() => setActiveTab('HISTORIAL')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'HISTORIAL' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}>
+                  <IconCalendar /> <span>Histórico</span>
+                </button>
+              )}
+              {currentUser.role === 'MASTER' && (
+                <button onClick={() => setActiveTab('USUARIOS')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'USUARIOS' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900'}`}>
+                  <IconUsers /> <span>Usuarios</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                <span className="text-xl">{currentUser.avatar || '👤'}</span>
+                <div className="text-left">
+                  <div className="text-xs font-bold text-slate-900 leading-tight">{currentUser.name}</div>
+                  <div className="text-[10px] text-red-600 font-mono font-bold">{currentUser.workshopArea || currentUser.role}</div>
+                </div>
+              </div>
+              <button onClick={() => setCurrentUser(null)} className="px-3.5 py-2 rounded-2xl bg-slate-100 hover:bg-red-50 text-slate-700 hover:text-red-600 transition-all text-xs font-bold flex items-center gap-1.5 border border-slate-200">
+                <IconLogOut /> <span>Salir</span>
+              </button>
+            </div>
+          </header>
+
+          <main className="flex-1 max-w-7xl w-full mx-auto p-6">
+            {activeTab === 'CREAR' && <OrderFormView currentUser={currentUser} nextCmdSeq={nextCmdSeq} onSave={handleSaveNewOrder} />}
+
+            {/* TABLERO GENERAL */}
+            {activeTab === 'KANBAN' && (
+              <div className="space-y-4">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
+                  <div className="relative w-full sm:w-80">
+                    <input type="text" placeholder="Buscar por #Comanda, Cliente, Memoria..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-900 outline-none focus:border-red-600" />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-500">Filtrar Taller:</span>
+                    <select value={selectedWorkshopFilter} onChange={e => setSelectedWorkshopFilter(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900 font-bold outline-none">
+                      <option value="TODOS">🌐 Todos los Talleres</option>
+                      <option value="IMPRESION">🖨️ Impresión Digital</option>
+                      <option value="LASER">⚡ Corte Láser / MDF</option>
+                      <option value="AMBOS">🔀 Trabajos Mixtos</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {Object.keys(STATUS_FLOW).map(stKey => {
+                    const colOrders = orders.filter(o => {
+                      const isNotExternal = o.targetWorkshop !== 'EXTERNO';
+                      const matchesStatus = o.status === stKey;
+                      const matchesSearch = o.id.toLowerCase().includes(searchTerm.toLowerCase()) || o.clientName.toLowerCase().includes(searchTerm.toLowerCase()) || (o.usbName && o.usbName.toLowerCase().includes(searchTerm.toLowerCase()));
+                      const matchesWorkshop = selectedWorkshopFilter === 'TODOS' || o.targetWorkshop === selectedWorkshopFilter;
+                      const matchesUserAccess = isOrderVisibleForUser(o);
+                      return isNotExternal && matchesStatus && matchesSearch && matchesWorkshop && matchesUserAccess;
+                    });
+
+                    return (
+                      <div key={stKey} className="bg-slate-200/50 border border-slate-300/70 rounded-2xl p-4 min-h-[500px]">
+                        <div className="flex justify-between items-center pb-2 mb-3 border-b border-slate-300">
+                          <h3 className="text-xs font-black uppercase text-slate-700">{STATUS_FLOW[stKey].label}</h3>
+                          <span className="px-2.5 py-0.5 rounded-full bg-white border border-slate-300 text-[10px] font-mono font-bold text-slate-900">{colOrders.length}</span>
+                        </div>
+
+                        <div className="space-y-3">
+                          {colOrders.map(o => {
+                            const wsInfo = WORKSHOP_TYPES[o.targetWorkshop || 'IMPRESION'];
+                            const isUrgent = o.priority === 'Urgente';
+                            return (
+                              <div key={o.id} className={`bg-white border-2 rounded-2xl p-4 space-y-2 shadow-sm hover:shadow-md transition-all ${
+                                isUrgent ? 'border-red-600 shadow-red-500/10 ring-2 ring-red-500/30' : 'border-slate-200'
+                              }`}>
+                                <div className="flex justify-between items-center font-mono text-xs font-bold text-slate-900">
+                                  <span className="text-red-600">{o.id}</span>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-lg border ${getPriorityBadgeClass(o.priority)}`}>
+                                    {o.priority}
+                                  </span>
+                                </div>
+
+                                <div className="text-sm font-extrabold text-slate-900">{o.clientName}</div>
+                                <div className="text-xs text-slate-600 font-mono font-bold">{o.width || '-'}x{o.height || '-'} {o.unit} ({o.quantity} pz)</div>
+                                
+                                {o.usbName && (
+                                  <div className="text-[11px] text-blue-700 font-mono font-bold flex items-center gap-1 bg-blue-50 p-1.5 rounded-lg border border-blue-200">
+                                    <IconUsb /> <span className="truncate">{o.usbName}</span>
+                                  </div>
+                                )}
+
+                                {o.targetWorkshop === 'AMBOS' && (
+                                  <div className="p-2 bg-amber-50 rounded-xl border border-amber-200 text-[10px] font-mono space-y-0.5">
+                                    <div>🖨️ Impresión: <strong className="text-slate-900">{STATUS_FLOW[o.statusImpresion || 'EN_ESPERA'].label}</strong></div>
+                                    <div>⚡ Corte Láser: <strong className="text-slate-900">{STATUS_FLOW[o.statusLaser || 'EN_ESPERA'].label}</strong></div>
+                                  </div>
+                                )}
+
+                                <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-[10px] text-slate-600 space-y-0.5 font-mono">
+                                  <div>✏️ Diseñador: <strong className="text-slate-900">{o.designerName}</strong></div>
+                                </div>
+
+                                <div className="text-[10px] font-mono text-slate-400 pt-1 flex justify-between items-center border-t border-slate-100">
+                                  <span>📅 {o.createdAt}</span>
+                                  
+                                  <div className="flex items-center gap-2">
+                                    {currentUser.role === 'MASTER' && (
+                                      <button onClick={() => handleDeleteOrder(o.id)} className="text-slate-400 hover:text-red-600 p-1" title="Eliminar Comanda (Solo Master)">
+                                        <IconTrash />
+                                      </button>
+                                    )}
+                                    <button onClick={() => setTicketModalOrder(o)} className="text-slate-600 hover:text-red-600 font-bold flex items-center gap-1">
+                                      <IconPrinter /> <span>Tiquete</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* VISTA 3: COLA DE TALLER */}
+            {activeTab === 'TALLER' && (
+              <div className="space-y-6">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-red-100 text-red-600 rounded-2xl border border-red-200">
+                      <IconPrinter />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-black text-slate-900">Cola de Trabajo de Taller</h2>
+                      <p className="text-xs text-slate-500">
+                        {currentUser.role === 'TALLER' && currentUser.workshopArea !== 'AMBOS'
+                          ? `Acceso Aislado: Viendo únicamente pendientes de ${currentUser.workshopArea === 'IMPRESION' ? 'Impresión Digital' : 'Corte Láser & MDF'}.`
+                          : 'Procesa los trabajos activos pendientes.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {currentUser.role === 'TALLER' && currentUser.workshopArea !== 'AMBOS' ? (
+                    <div className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold font-mono text-red-600 flex items-center gap-2">
+                      <IconLock />
+                      <span>Cola Aislada: {currentUser.workshopArea === 'IMPRESION' ? '🖨️ Impresión' : '⚡ Corte Láser'}</span>
+                    </div>
+                  ) : (
+                    <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 gap-1">
+                      <button onClick={() => setSelectedWorkshopFilter('IMPRESION')} className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${selectedWorkshopFilter === 'IMPRESION' ? 'bg-slate-900 text-white shadow' : 'text-slate-600'}`}>
+                        <span>🖨️ Taller Impresión</span>
+                      </button>
+                      <button onClick={() => setSelectedWorkshopFilter('LASER')} className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${selectedWorkshopFilter === 'LASER' ? 'bg-purple-600 text-white shadow' : 'text-slate-600'}`}>
+                        <span>⚡ Taller Corte Láser / MDF</span>
+                      </button>
+                      <button onClick={() => setSelectedWorkshopFilter('TODOS')} className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${selectedWorkshopFilter === 'TODOS' ? 'bg-red-600 text-white' : 'text-slate-600'}`}>
+                        🌐 Ver Todos
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {(() => {
+                  const activeArea = currentUser.workshopArea === 'LASER' ? 'LASER' : (selectedWorkshopFilter === 'LASER' ? 'LASER' : 'IMPRESION');
+
+                  const activePendingOrders = orders.filter(o => {
+                    if (o.targetWorkshop === 'EXTERNO') return false;
+                    if (!isOrderVisibleForUser(o)) return false;
+
+                    if (selectedWorkshopFilter === 'TODOS' && (currentUser.role === 'MASTER' || currentUser.workshopArea === 'AMBOS')) {
+                      return o.status !== 'LISTO';
+                    }
+
+                    if (o.targetWorkshop === 'AMBOS') {
+                      if (selectedWorkshopFilter === 'IMPRESION' || activeArea === 'IMPRESION') return (o.statusImpresion || 'EN_ESPERA') !== 'LISTO';
+                      if (selectedWorkshopFilter === 'LASER' || activeArea === 'LASER') return (o.statusLaser || 'EN_ESPERA') !== 'LISTO';
+                      return o.status !== 'LISTO';
+                    }
+
+                    return o.targetWorkshop === (currentUser.workshopArea !== 'AMBOS' ? currentUser.workshopArea : selectedWorkshopFilter) && o.status !== 'LISTO';
+                  });
+
+                  const completedWorkshopOrders = orders.filter(o => {
+                    if (o.targetWorkshop === 'EXTERNO') return false;
+                    if (!isOrderVisibleForUser(o)) return false;
+
+                    if (selectedWorkshopFilter === 'TODOS' && (currentUser.role === 'MASTER' || currentUser.workshopArea === 'AMBOS')) {
+                      return o.status === 'LISTO';
+                    }
+
+                    if (o.targetWorkshop === 'AMBOS') {
+                      if (selectedWorkshopFilter === 'IMPRESION' || activeArea === 'IMPRESION') return (o.statusImpresion || 'EN_ESPERA') === 'LISTO';
+                      if (selectedWorkshopFilter === 'LASER' || activeArea === 'LASER') return (o.statusLaser || 'EN_ESPERA') === 'LISTO';
+                      return o.status === 'LISTO';
+                    }
+
+                    return o.targetWorkshop === (currentUser.workshopArea !== 'AMBOS' ? currentUser.workshopArea : selectedWorkshopFilter) && o.status === 'LISTO';
+                  });
+
+                  return (
+                    <div className="space-y-8">
+                      {activePendingOrders.length === 0 ? (
+                        <div className="bg-white border border-slate-200 rounded-3xl p-12 text-center space-y-3 shadow-sm">
+                          <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                            <IconCheckCircle />
+                          </div>
+                          <h3 className="text-base font-extrabold text-slate-900">¡Excelente! Sin comandas pendientes en esta cola.</h3>
+                          <p className="text-xs text-slate-500">Cualquier nueva comanda enviada por los diseñadores sonará y aparecerá aquí automáticamente.</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {activePendingOrders.map(order => {
+                            const wsInfo = WORKSHOP_TYPES[order.targetWorkshop || 'IMPRESION'];
+                            const isUrgent = order.priority === 'Urgente';
+                            const isMixed = order.targetWorkshop === 'AMBOS';
+
+                            const currentSubStatus = isMixed 
+                              ? (activeArea === 'LASER' ? (order.statusLaser || 'EN_ESPERA') : (order.statusImpresion || 'EN_ESPERA'))
+                              : order.status;
+
+                            return (
+                              <div key={order.id} className={`bg-white border-2 rounded-3xl p-5 space-y-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between ${
+                                isUrgent ? 'border-red-600 shadow-red-500/10 ring-2 ring-red-500/30' : 'border-slate-200'
+                              }`}>
+                                <div className="space-y-3">
+                                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                                    <span className="text-xl font-black font-mono text-slate-900">{order.id}</span>
+                                    <span className={`px-2.5 py-1 rounded-xl text-xs font-bold border ${getPriorityBadgeClass(order.priority)}`}>
+                                      {order.priority}
+                                    </span>
+                                  </div>
+
+                                  <div>
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                      <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${wsInfo.badgeColor}`}>
+                                        {wsInfo.icon} {wsInfo.label}
+                                      </span>
+                                    </div>
+                                    <h3 className="text-base font-extrabold text-slate-900">{order.clientName}</h3>
+                                    <p className="text-xs text-slate-500">Tel: {order.clientPhone || 'N/A'}</p>
+                                  </div>
+
+                                  {order.usbName && (
+                                    <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-2xl text-xs font-mono font-bold text-blue-800 flex items-center gap-2">
+                                      <IconUsb /> <span>{order.usbName}</span>
+                                    </div>
+                                  )}
+
+                                  <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                                    <div className="text-slate-900 font-bold font-mono border-b border-slate-200 pb-1.5">
+                                      {order.width || '-'} x {order.height || '-'} {order.unit} ({order.quantity} Pz)
+                                    </div>
+
+                                    {(order.materials.length > 0 || order.customMaterial) && (
+                                      <div>
+                                        <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Especificaciones:</span>
+                                        <div className="flex flex-wrap gap-1">
+                                          {order.materials.map(m => (
+                                            <span key={m} className="px-2 py-0.5 bg-white border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-800">{m}</span>
+                                          ))}
+                                          {order.customMaterial && <span className="px-2 py-0.5 bg-amber-100 border border-amber-300 rounded-lg text-[11px] font-bold text-amber-900">{order.customMaterial}</span>}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {isMixed && (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs font-mono space-y-1">
+                                      <div className="font-extrabold text-[10px] uppercase text-amber-800 mb-1">🔀 Avance Independiente por Taller:</div>
+                                      <div className="flex justify-between">
+                                        <span>🖨️ Impresión Digital:</span>
+                                        <strong className="text-slate-900">{STATUS_FLOW[order.statusImpresion || 'EN_ESPERA'].label}</strong>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>⚡ Corte Láser / MDF:</span>
+                                        <strong className="text-slate-900">{STATUS_FLOW[order.statusLaser || 'EN_ESPERA'].label}</strong>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* CONSUMO REPORTE DUAL FILTRADO POR ROL STRICTO */}
+                                  <div className="flex gap-1.5 flex-wrap pt-1">
+                                    {(order.targetWorkshop === 'IMPRESION' || order.targetWorkshop === 'AMBOS') &&
+                                     (currentUser.role === 'MASTER' || currentUser.workshopArea === 'IMPRESION' || currentUser.workshopArea === 'AMBOS') && (
+                                      <button
+                                        onClick={() => setMaterialReportModal({ order, type: 'IMPRESION' })}
+                                        className="py-1.5 px-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-900 rounded-xl font-bold text-[10px] flex items-center justify-between transition-all"
+                                      >
+                                        <span>🖨️ Consumo Impresión</span>
+                                        <span className="underline ml-1">{(order.printMaterialReportText || order.printMaterialReportImg) ? '✏️ Ver' : '➕ Reg'}</span>
+                                      </button>
+                                    )}
+
+                                    {(order.targetWorkshop === 'LASER' || order.targetWorkshop === 'AMBOS') &&
+                                     (currentUser.role === 'MASTER' || currentUser.workshopArea === 'LASER' || currentUser.workshopArea === 'AMBOS') && (
+                                      <button
+                                        onClick={() => setMaterialReportModal({ order, type: 'LASER' })}
+                                        className="py-1.5 px-2 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-900 rounded-xl font-bold text-[10px] flex items-center justify-between transition-all"
+                                      >
+                                        <span>⚡ Consumo Láser</span>
+                                        <span className="underline ml-1">{(order.laserMaterialReportText || order.laserMaterialReportImg) ? '✏️ Ver' : '➕ Reg'}</span>
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="p-2.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs font-mono space-y-1">
+                                    <div className="text-slate-600">✏️ Diseñador: <strong className="text-slate-900">{order.designerName}</strong></div>
+                                    <div className="text-[10px] text-slate-400">📅 Fecha: {order.createdAt}</div>
+                                  </div>
+
+                                  {order.notes && (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 space-y-1">
+                                      <span className="font-extrabold text-[10px] uppercase tracking-wider block text-amber-800">💬 Observaciones Taller:</span>
+                                      <p className="whitespace-pre-wrap">{order.notes}</p>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex gap-2 pt-2">
+                                  <button onClick={() => setTicketModalOrder(order)} className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-2xl text-xs font-bold border border-slate-200 flex items-center justify-center transition-all" title="Imprimir Tiquete">
+                                    <IconPrinter />
+                                  </button>
+
+                                  {currentUser.role === 'MASTER' && (
+                                    <button onClick={() => handleDeleteOrder(order.id)} className="p-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl text-xs font-bold border border-red-200 flex items-center justify-center transition-all" title="Eliminar Comanda (Solo Master)">
+                                      <IconTrash />
+                                    </button>
+                                  )}
+
+                                  <button onClick={() => handleAdvanceStatus(order.id, activeArea)} className="flex-1 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 text-xs tracking-wide">
+                                    <span>{STATUS_FLOW[currentSubStatus].nextLabel}</span>
+                                    <IconArrowRight />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* SECCIÓN COMANDAS FINALIZADAS EN TALLER */}
+                      <div className="pt-6 border-t border-slate-200">
+                        <button
+                          onClick={() => setShowCompletedWorkshopSection(!showCompletedWorkshopSection)}
+                          className="w-full p-4 bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-xs font-bold transition-all text-slate-800 shadow-sm"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-emerald-600 text-base">✅</span>
+                            <span>MÓDULO DE COMANDAS FINALIZADAS EN ESTE TALLER ({completedWorkshopOrders.length})</span>
+                          </div>
+                          <span className="text-red-600 underline font-mono text-[11px]">
+                            {showCompletedWorkshopSection ? '▲ Ocultar Finalizadas' : '▼ Desplegar Finalizadas'}
+                          </span>
+                        </button>
+
+                        {showCompletedWorkshopSection && (
+                          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {completedWorkshopOrders.length === 0 ? (
+                              <div className="col-span-full p-6 text-center text-slate-400 text-xs italic bg-white rounded-2xl border border-slate-200">
+                                No hay comandas finalizadas recientemente en este taller.
+                              </div>
+                            ) : (
+                              completedWorkshopOrders.map(order => {
+                                const wsInfo = WORKSHOP_TYPES[order.targetWorkshop || 'IMPRESION'];
+                                return (
+                                  <div key={order.id} className="bg-white border border-emerald-300 rounded-2xl p-4 space-y-2.5 shadow-sm">
+                                    <div className="flex justify-between items-center font-mono text-xs font-bold border-b border-slate-100 pb-2">
+                                      <span className="text-emerald-800 font-extrabold">{order.id}</span>
+                                      <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${wsInfo.badgeColor}`}>
+                                        {wsInfo.icon} {wsInfo.label}
+                                      </span>
+                                    </div>
+
+                                    <div className="text-xs font-bold text-slate-900">{order.clientName}</div>
+                                    <div className="text-[11px] text-slate-600 font-mono">{order.width || '-'}x{order.height || '-'} {order.unit} ({order.quantity} pz)</div>
+                                    
+                                    <div className="p-2 bg-slate-50 rounded-xl border border-slate-200 text-[10px] font-mono text-slate-600 space-y-0.5">
+                                      {order.targetWorkshop === 'AMBOS' ? (
+                                        <React.Fragment>
+                                          <div>🖨️ Impresión: <strong className="text-emerald-800">{order.completedByImpresion || 'Completado'}</strong></div>
+                                          <div>⚡ Láser: <strong className="text-emerald-800">{order.completedByLaser || 'Completado'}</strong></div>
+                                        </React.Fragment>
+                                      ) : (
+                                        <div>✅ Finalizado por: <strong className="text-emerald-800">{order.completedBy || 'Taller'}</strong></div>
+                                      )}
+                                      <div className="text-[9px] text-slate-400">📅 {order.createdAt}</div>
+                                    </div>
+
+                                    {/* CONSUMO REPORTE DUAL FILTRADO EN TARJETA FINALIZADA */}
+                                    <div className="flex gap-1.5 flex-wrap pt-1">
+                                      {(order.printMaterialReportText || order.printMaterialReportImg) && (currentUser.role === 'MASTER' || currentUser.workshopArea === 'IMPRESION' || currentUser.workshopArea === 'AMBOS') && (
+                                        <button onClick={() => setMaterialReportModal({ order, type: 'IMPRESION' })} className="px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-900 rounded-lg text-[10px] font-bold">
+                                          🖨️ Consumo Impresión
+                                        </button>
+                                      )}
+                                      {(order.laserMaterialReportText || order.laserMaterialReportImg) && (currentUser.role === 'MASTER' || currentUser.workshopArea === 'LASER' || currentUser.workshopArea === 'AMBOS') && (
+                                        <button onClick={() => setMaterialReportModal({ order, type: 'LASER' })} className="px-2 py-0.5 bg-purple-50 border border-purple-200 text-purple-900 rounded-lg text-[10px] font-bold">
+                                          ⚡ Consumo Láser
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                                      {currentUser.role === 'MASTER' ? (
+                                        <button onClick={() => handleDeleteOrder(order.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all text-xs font-bold flex items-center gap-1" title="Eliminar Comanda (Solo Master)">
+                                          <IconTrash /> <span>Eliminar</span>
+                                        </button>
+                                      ) : <div />}
+
+                                      <button onClick={() => setTicketModalOrder(order)} className="text-slate-600 hover:text-red-600 text-xs font-bold flex items-center gap-1">
+                                        <IconPrinter /> <span>Reimprimir Tiquete</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* VISTA 4: HISTÓRICO Y REPORTES */}
+            {activeTab === 'HISTORIAL' && currentUser.role === 'MASTER' && (
+              <HistoricalReportView 
+                orders={orders} 
+                users={users} 
+                onOpenTicket={setTicketModalOrder} 
+                onDeleteOrder={handleDeleteOrder} 
+                onUpdatePaymentStatus={handleUpdatePaymentStatus}
+                onOpenMaterialReportModal={(o, type) => setMaterialReportModal({ order: o, type })}
+                currentUser={currentUser} 
+              />
+            )}
+
+            {/* VISTA 5: GESTIÓN DE USUARIOS */}
+            {activeTab === 'USUARIOS' && currentUser.role === 'MASTER' && (
+              <UserManagementView users={users} onCreateUser={handleCreateUser} onDeleteUser={handleDeleteUser} currentUser={currentUser} />
+            )}
+          </main>
+
+          {ticketModalOrder && (
+            <TicketModal order={ticketModalOrder} onClose={() => setTicketModalOrder(null)} />
+          )}
+
+          {materialReportModal && (
+            <MaterialReportModal 
+              order={materialReportModal.order} 
+              type={materialReportModal.type}
+              onClose={() => setMaterialReportModal(null)}
+              onSave={(reportText, reportImg) => {
+                handleSaveMaterialReport(materialReportModal.order.id, reportText, reportImg, materialReportModal.type);
+                setMaterialReportModal(null);
+              }}
+            />
+          )}
+        </div>
+      );
+    }
+
+    // --- MÓDULO HISTÓRICO Y REPORTES ---
+    function HistoricalReportView({ orders, users, onOpenTicket, onDeleteOrder, onUpdatePaymentStatus, onOpenMaterialReportModal, currentUser }) {
+      const [filterMode, setFilterMode] = useState('TODOS');
+      const [selectedDate, setSelectedDate] = useState('');
+      const [selectedMonth, setSelectedMonth] = useState('');
+      const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+      const [startDate, setStartDate] = useState('');
+      const [endDate, setEndDate] = useState('');
+
+      const [workshopFilter, setWorkshopFilter] = useState('TODOS');
+      const [designerFilter, setDesignerFilter] = useState('TODOS');
+      const [statusFilter, setStatusFilter] = useState('TODAS');
+      const [paymentFilter, setPaymentFilter] = useState('TODAS');
+      const [searchTerm, setSearchTerm] = useState('');
+
+      const filteredOrders = useMemo(() => {
+        return orders.filter(o => {
+          const oDate = new Date(o.timestamp || Date.now());
+
+          let matchesDate = true;
+          if (filterMode === 'DIA' && selectedDate) {
+            const [y, m, d] = selectedDate.split('-').map(Number);
+            matchesDate = oDate.getFullYear() === y && (oDate.getMonth() + 1) === m && oDate.getDate() === d;
+          } else if (filterMode === 'MES' && selectedMonth) {
+            const [y, m] = selectedMonth.split('-').map(Number);
+            matchesDate = oDate.getFullYear() === y && (oDate.getMonth() + 1) === m;
+          } else if (filterMode === 'ANIO' && selectedYear) {
+            matchesDate = oDate.getFullYear().toString() === selectedYear;
+          } else if (filterMode === 'RANGO' && startDate && endDate) {
+            const sTime = new Date(startDate + 'T00:00:00').getTime();
+            const eTime = new Date(endDate + 'T23:59:59').getTime();
+            const oTime = oDate.getTime();
+            matchesDate = oTime >= sTime && oTime <= eTime;
+          }
+
+          const matchesWorkshop = workshopFilter === 'TODOS' || o.targetWorkshop === workshopFilter;
+          const matchesDesigner = designerFilter === 'TODOS' || o.designerName === designerFilter;
+          const matchesStatus = statusFilter === 'TODAS' || o.status === statusFilter;
+          const matchesPayment = paymentFilter === 'TODAS' || (o.paymentStatus || 'PENDIENTE') === paymentFilter;
+          
+          const matchesSearch = !searchTerm || 
+            o.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            o.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (o.usbName && o.usbName.toLowerCase().includes(searchTerm.toLowerCase()));
+
+          return matchesDate && matchesWorkshop && matchesDesigner && matchesStatus && matchesPayment && matchesSearch;
+        });
+      }, [orders, filterMode, selectedDate, selectedMonth, selectedYear, startDate, endDate, workshopFilter, designerFilter, statusFilter, paymentFilter, searchTerm]);
+
+      const metrics = useMemo(() => {
+        const total = filteredOrders.length;
+        const impresion = filteredOrders.filter(o => o.targetWorkshop === 'IMPRESION').length;
+        const laser = filteredOrders.filter(o => o.targetWorkshop === 'LASER').length;
+        const listos = filteredOrders.filter(o => o.status === 'LISTO').length;
+        return { total, impresion, laser, listos };
+      }, [filteredOrders]);
+
+      return (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-red-600 font-extrabold text-xs uppercase tracking-wider mb-1">
+                <IconCalendar /> <span>Módulo de Supervisión e Histórico</span>
+              </div>
+              <h2 className="text-xl font-black text-slate-900">Registro Histórico & Tabulación Interna</h2>
+              <p className="text-xs text-slate-500">Filtrado por calendario, auditoría de materiales y trazabilidad nominal.</p>
+            </div>
+
+            <div className="text-right font-mono hidden sm:block">
+              <div className="text-2xl font-black text-red-600">{metrics.total}</div>
+              <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Comandas Encontradas</div>
+            </div>
+          </div>
+
+          {/* CALENDARIO INTERACTIVO */}
+          <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-4 shadow-sm">
+            <div>
+              <label className="text-[11px] font-extrabold text-slate-900 uppercase tracking-wider block mb-2">📅 Filtro por Calendario Interactivo:</label>
+              
+              <div className="flex flex-wrap gap-2 mb-3">
+                {[
+                  { id: 'TODOS', label: '🌐 Todas las Fechas' },
+                  { id: 'DIA', label: '📅 Buscar por Día Específico' },
+                  { id: 'MES', label: '🗓️ Buscar por Mes' },
+                  { id: 'ANIO', label: '🎆 Buscar por Año' },
+                  { id: 'RANGO', label: '📆 Rango de Fechas (Desde/Hasta)' }
+                ].map(mode => (
+                  <button
+                    key={mode.id}
+                    onClick={() => setFilterMode(mode.id)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+                      filterMode === mode.id 
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-md' 
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex flex-wrap gap-4 items-center">
+                {filterMode === 'DIA' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700">Seleccionar Día:</span>
+                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="bg-white border border-slate-300 rounded-xl p-2 text-xs font-bold text-slate-900 outline-none" />
+                  </div>
+                )}
+
+                {filterMode === 'MES' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700">Seleccionar Mes y Año:</span>
+                    <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="bg-white border border-slate-300 rounded-xl p-2 text-xs font-bold text-slate-900 outline-none" />
+                  </div>
+                )}
+
+                {filterMode === 'ANIO' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700">Seleccionar Año:</span>
+                    <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="bg-white border border-slate-300 rounded-xl p-2 text-xs font-bold text-slate-900 outline-none">
+                      {['2024', '2025', '2026', '2027', '2028'].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {filterMode === 'RANGO' && (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-slate-700">Desde:</span>
+                      <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-white border border-slate-300 rounded-xl p-2 text-xs font-bold text-slate-900 outline-none" />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-slate-700">Hasta:</span>
+                      <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-white border border-slate-300 rounded-xl p-2 text-xs font-bold text-slate-900 outline-none" />
+                    </div>
+                  </div>
+                )}
+
+                {filterMode === 'TODOS' && (
+                  <span className="text-xs text-slate-500 italic">Mostrando el historial completo sin restricción de calendario.</span>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-slate-100">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Taller Destino</label>
+                <select value={workshopFilter} onChange={e => setWorkshopFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs text-slate-900 font-bold outline-none">
+                  <option value="TODOS">Todos los Talleres</option>
+                  <option value="IMPRESION">🖨️ Impresión Digital</option>
+                  <option value="LASER">⚡ Corte Láser / MDF</option>
+                  <option value="AMBOS">🔀 Trabajos Mixtos</option>
+                  <option value="EXTERNO">🏢 Externos / Por Fuera</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Diseñador / Asesor</label>
+                <select value={designerFilter} onChange={e => setDesignerFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs text-slate-900 font-bold outline-none">
+                  <option value="TODOS">Todos los Diseñadores</option>
+                  {users.filter(u => u.role === 'DISENO' || u.role === 'MASTER').map(u => (
+                    <option key={u.id} value={u.name}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Estado de Pago</label>
+                <select value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs text-slate-900 font-bold outline-none">
+                  <option value="TODAS">Todos los Estados Pago</option>
+                  {Object.keys(PAYMENT_STATUS_OPTIONS).map(k => (
+                    <option key={k} value={k}>{PAYMENT_STATUS_OPTIONS[k].label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 block mb-1">Buscar Texto</label>
+                <input type="text" placeholder="#CMD, Cliente, USB..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs text-slate-900 outline-none" />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 font-mono shadow-sm">
+              <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Registros</span>
+              <span className="text-xl font-black text-slate-900">{metrics.total} comandas</span>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 font-mono shadow-sm">
+              <span className="text-[10px] text-slate-400 uppercase font-bold block">Taller Impresión</span>
+              <span className="text-xl font-black text-blue-700">{metrics.impresion} trabajos</span>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 font-mono shadow-sm">
+              <span className="text-[10px] text-slate-400 uppercase font-bold block">Taller Corte Láser</span>
+              <span className="text-xl font-black text-purple-700">{metrics.laser} trabajos</span>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 font-mono shadow-sm">
+              <span className="text-[10px] text-slate-400 uppercase font-bold block">Trabajos Finalizados</span>
+              <span className="text-xl font-black text-emerald-700">{metrics.listos} listos</span>
+            </div>
+          </div>
+
+          {/* TABLA HISTÓRICA CON INSIGNIAS DUALES FILTRADAS POR ROL */}
+          <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+            {filteredOrders.length === 0 ? (
+              <div className="p-12 text-center text-slate-400 text-sm">
+                No se encontraron comandas registradas para la fecha o filtros seleccionados.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-mono text-[10px] uppercase">
+                    <tr>
+                      <th className="p-4"># Comanda</th>
+                      <th className="p-4">Fecha / Hora</th>
+                      <th className="p-4">Cliente & Teléfono</th>
+                      <th className="p-4">Taller & Consumos</th>
+                      <th className="p-4">Estado de Cola</th>
+                      <th className="p-4">Trazabilidad (Usuarios)</th>
+                      <th className="p-4">Estado de Pago</th>
+                      <th className="p-4 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-sans">
+                    {filteredOrders.map(o => {
+                      const wsInfo = WORKSHOP_TYPES[o.targetWorkshop || 'IMPRESION'];
+                      const currentPayStatus = o.paymentStatus || 'PENDIENTE';
+                      return (
+                        <tr key={o.id} className="hover:bg-slate-50 transition-all">
+                          <td className="p-4 font-mono font-black text-red-600 text-sm">{o.id}</td>
+                          <td className="p-4 text-slate-400 font-mono text-[10px]">{o.createdAt}</td>
+                          <td className="p-4">
+                            <div className="font-extrabold text-slate-900">{o.clientName}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{o.clientPhone || 'Sin teléfono'}</div>
+                          </td>
+
+                          {/* TALLER Y BOTONES EMERGENTES DUALES FILTRADOS POR ROL */}
+                          <td className="p-4">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${wsInfo.badgeColor}`}>
+                                {wsInfo.icon} {wsInfo.label.split(' ')[1]}
+                              </span>
+
+                              {(o.targetWorkshop === 'IMPRESION' || o.targetWorkshop === 'AMBOS') &&
+                               (currentUser.role === 'MASTER' || currentUser.workshopArea === 'IMPRESION' || currentUser.workshopArea === 'AMBOS') && (
+                                <button
+                                  onClick={() => onOpenMaterialReportModal(o, 'IMPRESION')}
+                                  className={`px-2 py-0.5 rounded-lg font-bold text-[10px] flex items-center gap-1 border transition-all ${
+                                    (o.printMaterialReportText || o.printMaterialReportImg) 
+                                      ? 'bg-blue-100 hover:bg-blue-200 text-blue-900 border-blue-300' 
+                                      : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border-slate-300'
+                                  }`}
+                                  title="Ver/Editar Consumo Impresión Digital"
+                                >
+                                  <span>{(o.printMaterialReportText || o.printMaterialReportImg) ? '🖨️ Consumo Imp' : '+ Impresión'}</span>
+                                </button>
+                              )}
+
+                              {(o.targetWorkshop === 'LASER' || o.targetWorkshop === 'AMBOS') &&
+                               (currentUser.role === 'MASTER' || currentUser.workshopArea === 'LASER' || currentUser.workshopArea === 'AMBOS') && (
+                                <button
+                                  onClick={() => onOpenMaterialReportModal(o, 'LASER')}
+                                  className={`px-2 py-0.5 rounded-lg font-bold text-[10px] flex items-center gap-1 border transition-all ${
+                                    (o.laserMaterialReportText || o.laserMaterialReportImg) 
+                                      ? 'bg-purple-100 hover:bg-purple-200 text-purple-900 border-purple-300' 
+                                      : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border-slate-300'
+                                  }`}
+                                  title="Ver/Editar Consumo Láser / MDF"
+                                >
+                                  <span>{(o.laserMaterialReportText || o.laserMaterialReportImg) ? '⚡ Consumo Láser' : '+ Láser'}</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="p-4">
+                            <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-extrabold ${STATUS_FLOW[o.status].color}`}>
+                              {STATUS_FLOW[o.status].label}
+                            </span>
+                            {o.targetWorkshop === 'AMBOS' && (
+                              <div className="text-[9px] font-mono text-slate-500 mt-1">
+                                🖨️ {STATUS_FLOW[o.statusImpresion || 'EN_ESPERA'].label.split('.')[1]} | ⚡ {STATUS_FLOW[o.statusLaser || 'EN_ESPERA'].label.split('.')[1]}
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="p-4 text-[10px] font-mono space-y-0.5">
+                            <div>✏️ Diseñador: <strong className="text-slate-900">{o.designerName}</strong></div>
+                            {(o.acceptedBy || o.acceptedByImpresion || o.acceptedByLaser) && (
+                              <div className="text-blue-700 font-bold">📥 Recibido: {o.acceptedBy || o.acceptedByImpresion || o.acceptedByLaser}</div>
+                            )}
+                            {(o.completedBy || o.completedByImpresion || o.completedByLaser) && (
+                              <div className="text-emerald-700 font-bold">✅ Finalizado: {o.completedBy || o.completedByImpresion || o.completedByLaser}</div>
+                            )}
+                          </td>
+
+                          <td className="p-4">
+                            <select
+                              value={currentPayStatus}
+                              onChange={e => onUpdatePaymentStatus(o.id, e.target.value)}
+                              className={`px-2.5 py-1 rounded-xl font-bold text-xs border outline-none cursor-pointer ${PAYMENT_STATUS_OPTIONS[currentPayStatus].class}`}
+                            >
+                              {Object.keys(PAYMENT_STATUS_OPTIONS).map(k => (
+                                <option key={k} value={k}>{PAYMENT_STATUS_OPTIONS[k].label}</option>
+                              ))}
+                            </select>
+                          </td>
+
+                          <td className="p-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {currentUser.role === 'MASTER' && (
+                                <button onClick={() => onDeleteOrder(o.id)} className="p-2 bg-red-50 hover:bg-red-600 hover:text-white text-red-600 rounded-xl transition-all font-bold text-[11px]" title="Eliminar Comanda (Solo Master)">
+                                  <IconTrash />
+                                </button>
+                              )}
+
+                              <button onClick={() => onOpenTicket(o)} className="p-2 bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 rounded-xl transition-all font-bold text-[11px]" title="Ver e Imprimir Tiquete">
+                                <IconPrinter />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // --- FORMULARIO NUEVA COMANDA ---
+    function OrderFormView({ currentUser, nextCmdSeq, onSave }) {
+      const [clientName, setClientName] = useState('');
+      const [clientPhone, setClientPhone] = useState('');
+      const [priority, setPriority] = useState('Normal');
+      const [targetWorkshop, setTargetWorkshop] = useState('IMPRESION');
+      
+      const [baseMaterial, setBaseMaterial] = useState('');
+      const [customMaterial, setCustomMaterial] = useState('');
+
+      const [materialFinish, setMaterialFinish] = useState('');
+
+      const [plastificadoType, setPlastificadoType] = useState('');
+      const [plastificadoFinish, setPlastificadoFinish] = useState('');
+
+      const [hasCorte, setHasCorte] = useState(false);
+      const [hasTransporte, setHasTransporte] = useState(false);
+      const [customProcess, setCustomProcess] = useState('');
+
+      const [width, setWidth] = useState('');
+      const [height, setHeight] = useState('');
+      const [unit, setUnit] = useState('cm');
+      const [quantity, setQuantity] = useState(1);
+      
+      const [usbName, setUsbName] = useState('');
+      const [notes, setNotes] = useState('');
+
+      const [totalCost, setTotalCost] = useState('');
+      const [advancePayment, setAdvancePayment] = useState('');
+
+      const pendingBalance = useMemo(() => {
+        const tot = parseFloat(totalCost) || 0;
+        const adv = parseFloat(advancePayment) || 0;
+        return Math.max(0, tot - adv);
+      }, [totalCost, advancePayment]);
+
+      const isMaterialSelected = Boolean(baseMaterial || customMaterial.trim());
+      const isCompatibleMaterial = isMaterialSelected && baseMaterial && !NO_FINISH_MATERIALS.includes(baseMaterial);
+      const isMaterialFinishSelected = isCompatibleMaterial && Boolean(materialFinish);
+      const isPlastificadoTypeSelected = isMaterialFinishSelected && Boolean(plastificadoType);
+
+      const handleProcessSubmit = shouldPrint => {
+        if (!clientName.trim()) return alert('Por favor ingresa el nombre del cliente');
+
+        const generatedMaterialsList = [];
+
+        if (baseMaterial) {
+          let matStr = baseMaterial;
+          if (isCompatibleMaterial && materialFinish) {
+            matStr += ` ${materialFinish}`;
+          }
+          generatedMaterialsList.push(matStr);
+        } else if (customMaterial.trim()) {
+          generatedMaterialsList.push(customMaterial.trim());
+        }
+
+        if (isMaterialFinishSelected && plastificadoType) {
+          let plastStr = `Plastificado ${plastificadoType}`;
+          if (plastificadoFinish) plastStr += ` ${plastificadoFinish}`;
+          generatedMaterialsList.push(plastStr);
+        }
+
+        if (hasCorte) generatedMaterialsList.push('Corte');
+        if (hasTransporte) generatedMaterialsList.push('Transporte');
+        if (customProcess.trim()) generatedMaterialsList.push(customProcess.trim());
+
+        if (generatedMaterialsList.length === 0) {
+          return alert('Por favor selecciona al menos un material o proceso para la comanda.');
+        }
+
+        onSave({
+          clientName,
+          clientPhone,
+          priority,
+          targetWorkshop,
+          printType: '',
+          materials: generatedMaterialsList,
+          customMaterial: '',
+          width,
+          height,
+          unit,
+          quantity,
+          finishes: [],
+          customFinish: '',
+          usbName,
+          notes,
+          totalCost: totalCost ? parseFloat(totalCost) : '',
+          advancePayment: advancePayment ? parseFloat(advancePayment) : '',
+          pendingBalance
+        }, shouldPrint);
+      };
+
+      return (
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 lg:p-8 max-w-4xl mx-auto shadow-sm">
+          <div className="border-b border-slate-100 pb-4 mb-6">
+            <h2 className="text-xl font-black text-slate-900">Comanda Técnica de Producción <span className="text-red-600">#CMD-{nextCmdSeq}</span></h2>
+            <p className="text-xs text-slate-500">Selecciona las especificaciones requeridas para este trabajo.</p>
+          </div>
+
+          <form onSubmit={e => e.preventDefault()} className="space-y-6 text-xs">
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+              <label className="font-black text-slate-900 block uppercase tracking-wider">🎯 Taller de Destino / Área de Producción *</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                {Object.keys(WORKSHOP_TYPES).map(wsKey => {
+                  const ws = WORKSHOP_TYPES[wsKey];
+                  const isSelected = targetWorkshop === wsKey;
+                  return (
+                    <button type="button" key={wsKey} onClick={() => setTargetWorkshop(wsKey)} className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all ${
+                      isSelected ? 'bg-slate-900 text-white font-black border-slate-900 shadow-md' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                    }`}>
+                      <span className="text-2xl">{ws.icon}</span>
+                      <span className="text-xs">{ws.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {targetWorkshop === 'EXTERNO' && (
+                <p className="text-[11px] text-red-600 font-bold italic pt-1">
+                  🏢 Trabajo Externo: Esta comanda NO llegará a la cola de los talleres físicos y se registrará directamente en el Histórico para supervisión.
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1 uppercase">Cliente / Empresa *</label>
+                <input type="text" required placeholder="Ej. Comercializadora Andina" value={clientName} onChange={e => setClientName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-slate-900 outline-none focus:border-red-600 text-sm font-semibold" />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1 uppercase">Teléfono de Contacto</label>
+                <input type="text" placeholder="+57 310 123 4567" value={clientPhone} onChange={e => setClientPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-slate-900 outline-none focus:border-red-600 text-sm" />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1 uppercase">Diseñador / Asesor Activo</label>
+                <input type="text" readOnly value={currentUser.name} className="w-full bg-slate-100 border border-slate-200 rounded-2xl p-3 text-red-600 font-extrabold cursor-not-allowed text-sm" />
+              </div>
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-700 block mb-2 uppercase">Prioridad de Producción</label>
+              <div className="grid grid-cols-4 gap-2">
+                {['Baja', 'Normal', 'Alta', 'Urgente'].map(p => (
+                  <button type="button" key={p} onClick={() => setPriority(p)} className={`py-2.5 rounded-2xl border font-bold text-center transition-all ${
+                    priority === p ? (p === 'Urgente' ? 'bg-red-600 text-white border-red-600 animate-pulse font-black shadow-md' : 'bg-slate-900 text-white border-slate-900') : 'bg-slate-50 border-slate-200 text-slate-600'
+                  }`}>
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* SELECTOR CASCADA UNO A UNO DE MATERIALES */}
+            <div className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-5">
+              <h3 className="font-black text-slate-900 uppercase tracking-wider text-xs border-b border-slate-200 pb-2">
+                📦 Especificación de Material y Procesos (Paso a Paso)
+              </h3>
+
+              {/* PASO 1 */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-2 text-[11px] uppercase">1. Seleccionar Material Principal / Sustrato:</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                  {BASE_MATERIALS_LIST.map(mat => {
+                    const isSelected = baseMaterial === mat;
+                    return (
+                      <button
+                        type="button"
+                        key={mat}
+                        onClick={() => {
+                          if (isSelected) {
+                            setBaseMaterial('');
+                            setMaterialFinish('');
+                            setPlastificadoType('');
+                            setPlastificadoFinish('');
+                          } else {
+                            setBaseMaterial(mat);
+                            setCustomMaterial('');
+                            setMaterialFinish('');
+                            setPlastificadoType('');
+                            setPlastificadoFinish('');
+                          }
+                        }}
+                        className={`p-2.5 rounded-2xl border text-xs font-bold transition-all text-center ${
+                          isSelected ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        {mat}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-2">
+                  <input 
+                    type="text" 
+                    placeholder="¿Otro Material Base? Escríbelo aquí..." 
+                    value={customMaterial} 
+                    onChange={e => {
+                      setCustomMaterial(e.target.value);
+                      setBaseMaterial('');
+                      setMaterialFinish('');
+                      setPlastificadoType('');
+                      setPlastificadoFinish('');
+                    }} 
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 outline-none focus:border-red-600" 
+                  />
+                </div>
+              </div>
+
+              {/* PASO 2 */}
+              {isCompatibleMaterial && (
+                <div className="pt-3 border-t border-slate-200/80 animate-fadeIn">
+                  <label className="font-bold text-slate-700 block mb-1.5 text-[11px] uppercase">2. Seleccionar Acabado de {baseMaterial}:</label>
+                  <div className="flex gap-2">
+                    {['Mate', 'Brillante'].map(f => (
+                      <button
+                        type="button"
+                        key={f}
+                        onClick={() => {
+                          if (materialFinish === f) {
+                            setMaterialFinish('');
+                            setPlastificadoType('');
+                            setPlastificadoFinish('');
+                          } else {
+                            setMaterialFinish(f);
+                            setPlastificadoType('');
+                            setPlastificadoFinish('');
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-xl border text-xs font-bold transition-all ${
+                          materialFinish === f ? 'bg-red-600 text-white border-red-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* PASO 3 */}
+              {isMaterialFinishSelected && (
+                <div className="pt-3 border-t border-slate-200/80 space-y-2 animate-fadeIn">
+                  <label className="font-bold text-slate-700 block text-[11px] uppercase">3. Seleccionar Plastificado / Laminado (Opcional):</label>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {['Transparente', 'Blanco'].map(pt => (
+                      <button
+                        type="button"
+                        key={pt}
+                        onClick={() => {
+                          if (plastificadoType === pt) {
+                            setPlastificadoType('');
+                            setPlastificadoFinish('');
+                          } else {
+                            setPlastificadoType(pt);
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-xl border text-xs font-bold transition-all ${
+                          plastificadoType === pt ? 'bg-purple-600 text-white border-purple-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        Plastificado {pt}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* PASO 4 */}
+                  {isPlastificadoTypeSelected && (
+                    <div className="p-3 bg-white border border-slate-200 rounded-2xl space-y-2 mt-2 animate-fadeIn">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block">4. Acabado del Plastificado {plastificadoType}:</span>
+                      <div className="flex gap-2">
+                        {['Mate', 'Brillante'].map(pf => (
+                          <button
+                            type="button"
+                            key={pf}
+                            onClick={() => setPlastificadoFinish(plastificadoFinish === pf ? '' : pf)}
+                            className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                              plastificadoFinish === pf ? 'bg-purple-600 text-white border-purple-600' : 'bg-slate-50 border-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {pf}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* PROCESOS ADICIONALES */}
+              <div className="pt-3 border-t border-slate-200/80 space-y-2">
+                <label className="font-bold text-slate-700 block text-[11px] uppercase">Procesos Adicionales / Entrega:</label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHasCorte(!hasCorte)}
+                    className={`px-4 py-2 rounded-xl border text-xs font-bold transition-all ${
+                      hasCorte ? 'bg-purple-600 text-white border-purple-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    ✂️ Corte
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHasTransporte(!hasTransporte)}
+                    className={`px-4 py-2 rounded-xl border text-xs font-bold transition-all ${
+                      hasTransporte ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    🚚 Transporte
+                  </button>
+                </div>
+
+                <input 
+                  type="text" 
+                  placeholder="¿Otro proceso especial? Escríbelo aquí..." 
+                  value={customProcess} 
+                  onChange={e => setCustomProcess(e.target.value)} 
+                  className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 outline-none focus:border-red-600 mt-1" 
+                />
+              </div>
+            </div>
+
+            {/* MEDIDAS OPCIONALES */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-4 items-end">
+              <div>
+                <label className="text-slate-500 block mb-1 font-bold">Ancho (Opcional)</label>
+                <input type="number" step="any" min="0" placeholder="0" value={width} onChange={e => setWidth(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono text-sm font-bold" />
+              </div>
+              <div>
+                <label className="text-slate-500 block mb-1 font-bold">Alto (Opcional)</label>
+                <input type="number" step="any" min="0" placeholder="0" value={height} onChange={e => setHeight(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono text-sm font-bold" />
+              </div>
+              <div>
+                <label className="text-slate-500 block mb-1 font-bold">Unidad</label>
+                <select value={unit} onChange={e => setUnit(e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-slate-900 font-mono text-sm font-bold">
+                  <option value="cm">Centímetros (cm)</option>
+                  <option value="m">Metros (m)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-slate-500 block mb-1 font-bold">Cantidad (Piezas)</label>
+                <input type="number" min="1" value={quantity} onChange={e => setQuantity(parseInt(e.target.value, 10) || 1)} className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-red-600 font-black font-mono text-sm" />
+              </div>
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-700 block mb-1 uppercase">Identificación / Nombre de la Memoria USB</label>
+              <div className="relative">
+                <input type="text" placeholder="Ej. MEMORIA KINGSTON AZUL 16GB" value={usbName} onChange={e => setUsbName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 pl-10 text-slate-900 font-mono outline-none focus:border-red-600" />
+                <div className="absolute left-3.5 top-3.5 text-slate-400"><IconUsb /></div>
+              </div>
+            </div>
+
+            <div>
+              <label className="font-black text-slate-900 block mb-1 uppercase tracking-wider">💬 Recuadro para Observaciones / Notas Especiales de Taller</label>
+              <textarea
+                rows={4}
+                placeholder="Instrucciones especiales de corte, empacado, armado o calibres..."
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                className="w-full bg-slate-50 border-2 border-slate-200 focus:border-red-600 rounded-2xl p-3.5 text-slate-900 text-sm outline-none resize-y leading-relaxed font-medium"
+              />
+            </div>
+
+            {/* RESUMEN FINANCIERO OPCIONAL */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Costo Total ($ COP)</label>
+                  <input 
+                    type="number" 
+                    placeholder="0" 
+                    value={totalCost} 
+                    onChange={e => setTotalCost(e.target.value)} 
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-mono text-sm text-slate-900 font-bold outline-none" 
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Abono / Anticipo ($ COP)</label>
+                  <input 
+                    type="number" 
+                    placeholder="0" 
+                    value={advancePayment} 
+                    onChange={e => setAdvancePayment(e.target.value)} 
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 font-mono text-sm text-blue-800 font-bold outline-none" 
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">Saldo Pendiente</label>
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-sm text-red-600 font-black">
+                    {formatCurrency(pendingBalance)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <button type="button" onClick={() => handleProcessSubmit(false)} className="py-4 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-2xl text-sm tracking-wide shadow-md transition-all flex items-center justify-center gap-2">
+                <span>ENVIAR A TALLER</span>
+                <IconArrowRight />
+              </button>
+
+              <button type="button" onClick={() => handleProcessSubmit(true)} className="py-4 bg-red-600 hover:bg-red-700 text-white font-black rounded-2xl text-sm tracking-wide shadow-md transition-all flex items-center justify-center gap-2">
+                <IconPrinter />
+                <span>ENVIAR E IMPRIMIR TIQUETE</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      );
+    }
+
+    // --- VISTA GESTIÓN USUARIOS ---
+    function UserManagementView({ users, onCreateUser, onDeleteUser, currentUser }) {
+      const [name, setName] = useState('');
+      const [pin, setPin] = useState('');
+      const [role, setRole] = useState('DISENO');
+      const [workshopArea, setWorkshopArea] = useState('AMBOS');
+      const [title, setTitle] = useState('');
+
+      const handleSubmit = e => {
+        e.preventDefault();
+        if (!name.trim()) return alert('Ingresa el nombre del usuario');
+        if (pin.length !== 4) return alert('El PIN debe tener 4 dígitos');
+
+        const newUserObj = {
+          id: 'usr-' + Date.now(),
+          name: name.trim(),
+          pin,
+          role,
+          workshopArea,
+          title: title.trim() || (role === 'DISENO' ? 'Diseñador Gráfico' : role === 'TALLER' ? 'Operario Taller' : 'Master'),
+          avatar: role === 'MASTER' ? '👑' : role === 'DISENO' ? '🎨' : (workshopArea === 'LASER' ? '⚡' : '🖨️')
+        };
+
+        onCreateUser(newUserObj);
+        setName('');
+        setPin('');
+        setTitle('');
+        alert(`✅ Usuario ${newUserObj.name} creado.`);
+      };
+
+      return (
+        <div className="space-y-6 max-w-4xl mx-auto">
+          <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm">
+            <h2 className="text-xl font-black text-slate-900 mb-1">👥 Administración de Usuarios y Asignación de Talleres</h2>
+            <p className="text-xs text-slate-500">Asigna a qué taller específico pertenece cada operario.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white border border-slate-200 p-6 rounded-3xl space-y-4 shadow-sm">
+              <h3 className="text-sm font-black uppercase text-slate-900 border-b border-slate-100 pb-2">Crear Nuevo Usuario</h3>
+              <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Nombre Completo *</label>
+                  <input type="text" required placeholder="Ej. Jorge Hernández" value={name} onChange={e => setName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 outline-none focus:border-red-600" />
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Cargo / Permisos *</label>
+                  <select value={role} onChange={e => setRole(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 font-bold">
+                    <option value="DISENO">🎨 Diseñador (Crear comandas y ver tablero)</option>
+                    <option value="TALLER">🖨️ Operario de Taller (Procesar comandas)</option>
+                    <option value="MASTER">👑 Supervisión Master (Acceso Total)</option>
+                  </select>
+                </div>
+
+                {role === 'TALLER' && (
+                  <div>
+                    <label className="block text-red-600 font-bold mb-1">Taller Asignado *</label>
+                    <select value={workshopArea} onChange={e => setWorkshopArea(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 font-bold">
+                      <option value="IMPRESION">🖨️ Taller de Impresión Digital</option>
+                      <option value="LASER">⚡ Taller de Corte Láser, Acrílico & MDF</option>
+                      <option value="AMBOS">🔀 Ambos Talleres (Taller General)</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">PIN (4 dígitos) *</label>
+                    <input type="text" maxLength={4} required placeholder="1234" value={pin} onChange={e => setPin(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-red-600 font-mono font-black text-center text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Título / Especialidad</label>
+                    <input type="text" placeholder="Ej. Operario Láser" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900" />
+                  </div>
+                </div>
+
+                <button type="submit" className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-2xl text-xs tracking-wide shadow-md transition-all mt-2">
+                  REGISTRAR USUARIO
+                </button>
+              </form>
+            </div>
+
+            <div className="bg-white border border-slate-200 p-6 rounded-3xl space-y-4 shadow-sm">
+              <h3 className="text-sm font-black uppercase text-slate-900 border-b border-slate-100 pb-2">Usuarios Activos ({users.length})</h3>
+              <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                {users.map(u => (
+                  <div key={u.id} className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{u.avatar}</span>
+                      <div>
+                        <div className="font-bold text-xs text-slate-900">{u.name}</div>
+                        <div className="text-[10px] text-slate-500">{u.title} • <span className="text-red-600 font-mono font-bold">PIN: {u.pin}</span></div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg bg-white text-slate-700 border border-slate-200">{u.workshopArea || u.role}</span>
+                      {u.id !== currentUser.id && (
+                        <button onClick={() => onDeleteUser(u.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded-xl transition-all">
+                          <IconTrash />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- MODAL REPORTE DUAL (TEXTO + CAPTURA POR PORTAPAPELES CTRL+V) ---
+    function MaterialReportModal({ order, type, onClose, onSave }) {
+      const isPrint = type === 'IMPRESION';
+      
+      const initialText = isPrint ? (order.printMaterialReportText || '') : (order.laserMaterialReportText || '');
+      const initialImg = isPrint ? (order.printMaterialReportImg || '') : (order.laserMaterialReportImg || '');
+
+      const [reportText, setReportText] = useState(initialText);
+      const [reportImg, setReportImg] = useState(initialImg);
+
+      // REDIMENSIONADO Y COMPRESIÓN AUTOMÁTICA EN CANVAS
+      const compressAndSetImage = (file) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let maxW = 800;
+            let scale = maxW / img.width;
+            if (scale > 1) scale = 1;
+
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            setReportImg(compressedDataUrl);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      };
+
+      // EVENTO PEGADO DESDE PORTAPAPELES (CTRL + V / CMD + V)
+      const handlePaste = (e) => {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (let index in items) {
+          const item = items[index];
+          if (item.kind === 'file' && item.type.indexOf('image') !== -1) {
+            const blob = item.getAsFile();
+            compressAndSetImage(blob);
+            break;
+          }
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden p-6 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="font-black text-slate-900 text-sm">
+                📝 Reporte Consumo Material {isPrint ? '🖨️ Impresión' : '⚡ Corte Láser'} ({order.id})
+              </h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-900"><IconX /></button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Escribe tus notas y presiona <strong className="text-slate-900 font-mono bg-slate-100 px-1 py-0.5 rounded border border-slate-200">Ctrl + V</strong> (o Cmd+V) dentro del cuadro para pegar una captura de pantalla del portapapeles.
+            </p>
+
+            {/* RECUADRO UNIFICADO TEXTO + PEGAR PORTAPAPELES */}
+            <div className="space-y-3">
+              <textarea
+                rows={4}
+                onPaste={handlePaste}
+                placeholder={isPrint ? "Escribe aquí y/o presiona Ctrl+V para pegar la captura..." : "Escribe aquí y/o presiona Ctrl+V para pegar la captura..."}
+                value={reportText}
+                onChange={e => setReportText(e.target.value)}
+                className={`w-full bg-slate-50 border-2 border-slate-200 rounded-2xl p-3.5 text-xs text-slate-900 font-mono outline-none ${isPrint ? 'focus:border-blue-600' : 'focus:border-purple-600'}`}
+              />
+
+              {/* MUESTRA VISTA PREVIA DE LA IMAGEN PEGADA */}
+              {reportImg && (
+                <div className="relative p-2 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">📷 Captura Pegada del Portapapeles:</span>
+                    <button 
+                      type="button" 
+                      onClick={() => setReportImg('')} 
+                      className="text-red-600 hover:text-red-800 text-[10px] font-bold underline"
+                    >
+                      Quitar Imagen
+                    </button>
+                  </div>
+                  <img src={reportImg} alt="Captura Pegada" className="w-full max-h-48 object-contain rounded-xl border border-slate-300 bg-white" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button onClick={onClose} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">Cancelar</button>
+              <button 
+                onClick={() => onSave(reportText, reportImg)} 
+                className={`px-5 py-2 text-white font-black rounded-xl text-xs shadow-md ${isPrint ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+              >
+                Guardar Reporte
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- MODAL IMPRESIÓN TIQUETE (100% TÉCNICO SIN DINERO) ---
+    function TicketModal({ order, onClose }) {
+      const wsInfo = WORKSHOP_TYPES[order.targetWorkshop || 'IMPRESION'];
+      return (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+              <div className="flex items-center gap-2 text-slate-900 font-black text-sm">
+                <IconPrinter /> <span>Tiquete de Producción</span>
+              </div>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-900"><IconX /></button>
+            </div>
+
+            <div className="p-6 overflow-y-auto bg-slate-100 flex justify-center">
+              <div id="printable-ticket" className="bg-white text-black p-6 font-mono text-xs rounded-xl shadow-md space-y-4 w-full max-w-xs border border-slate-200">
+                <div className="text-center border-b border-dashed border-slate-400 pb-3">
+                  <div className="font-black text-sm uppercase">EL BIGOTE DE MI PRIMA ®</div>
+                  <p className="text-[10px] text-slate-600">Taller Gráfico & Impresión Digital</p>
+                  <div className="mt-1 text-xs font-bold uppercase underline">{wsInfo.label}</div>
+                  <div className="mt-2 text-2xl font-black font-mono bg-black text-white py-1 rounded-lg">
+                    {order.id}
+                  </div>
+                </div>
+
+                <div className="space-y-1 text-[11px]">
+                  <div><strong>Fecha:</strong> {order.createdAt}</div>
+                  <div><strong>Cliente:</strong> {order.clientName}</div>
+                  <div><strong>Teléfono:</strong> {order.clientPhone || 'N/A'}</div>
+                  <div><strong>Diseñador:</strong> {order.designerName}</div>
+                  <div><strong>Prioridad:</strong> {order.priority.toUpperCase()}</div>
+                </div>
+
+                <div className="border-t border-dashed border-slate-400 pt-2 space-y-1.5 text-[11px]">
+                  <div><strong>Medidas:</strong> {order.width || '-'} x {order.height || '-'} {order.unit}</div>
+                  <div><strong>Cantidad:</strong> {order.quantity} Pieza(s)</div>
+                  
+                  {order.usbName && (
+                    <div className="bg-slate-100 p-1.5 rounded-lg font-bold border border-slate-300">
+                      💾 USB: {order.usbName}
+                    </div>
+                  )}
+
+                  {(order.materials.length > 0 || order.customMaterial) && (
+                    <div>
+                      <strong>Especificaciones:</strong>
+                      <ul className="list-disc pl-4">
+                        {order.materials.map(m => <li key={m}>{m}</li>)}
+                        {order.customMaterial && <li>{order.customMaterial}</li>}
+                      </ul>
+                    </div>
+                  )}
+
+                  {order.notes && (
+                    <div className="pt-2 border-t border-slate-300 italic">
+                      <strong>Notas:</strong> {order.notes}
+                    </div>
+                  )}
+                </div>
+
+                {order.totalCost ? (
+                  <div className="border-t border-b border-black py-2 space-y-1">
+                    <div className="flex justify-between"><span>Costo Total:</span> <span>{formatCurrency(order.totalCost)}</span></div>
+                    <div className="flex justify-between"><span>Abono:</span> <span>{formatCurrency(order.advancePayment)}</span></div>
+                    <div className="flex justify-between font-bold"><span>SALDO:</span> <span>{formatCurrency(order.pendingBalance)}</span></div>
+                  </div>
+                ) : null}
+
+                <div className="pt-6 grid grid-cols-2 gap-4 text-center text-[9px]">
+                  <div className="border-t border-black pt-1">Firma Recepción</div>
+                  <div className="border-t border-black pt-1">Firma Entrega</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-white border-t border-slate-200 flex justify-end gap-3">
+              <button onClick={onClose} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold">Cerrar</button>
+              <button onClick={() => window.print()} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-md">
+                <IconPrinter /> <span>IMPRIMIR TIQUETE</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

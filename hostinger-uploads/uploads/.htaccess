@@ -1,0 +1,23 @@
+# Esta carpeta solo debe SERVIR archivos (PDF, imágenes, etc.), nunca
+# ejecutarlos. Esto evita que alguien suba un ".php" disfrazado de archivo
+# de diseño y luego lo ejecute visitando su URL.
+
+# Apache 2.4+
+<IfModule mod_authz_core.c>
+  <FilesMatch "\.(php|phtml|php\d|pl|py|cgi|sh|exe)$">
+    Require all denied
+  </FilesMatch>
+</IfModule>
+
+# Apache 2.2 (hosting más viejo)
+<IfModule !mod_authz_core.c>
+  <FilesMatch "\.(php|phtml|php\d|pl|py|cgi|sh|exe)$">
+    Order Allow,Deny
+    Deny from all
+  </FilesMatch>
+</IfModule>
+
+# Por si acaso, que tampoco se ejecuten como script aunque el filtro anterior falle
+<IfModule mod_php.c>
+  php_flag engine off
+</IfModule>

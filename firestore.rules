@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function role() {
+      return userDoc().role;
+    }
+
+    function workshopArea() {
+      return userDoc().workshopArea;
+    }
+
+    function isMaster() {
+      return isSignedIn() && role() == 'MASTER';
+    }
+
+    // Perfiles de usuario (nombre, rol, taller). Las contraseñas NUNCA se
+    // guardan aquí, viven únicamente en Firebase Authentication.
+    match /usuarios/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isMaster();
+    }
+
+    // Comandas de producción: solo se puede leer lo que corresponde al taller
+    // del usuario (o todo, si es MASTER, DISENO o un taller "AMBOS"). Los
+    // "Trabajos Externos" son la excepción: solo MASTER puede leerlos, sin
+    // importar el rol/taller (son para supervisión, no pasan por ningún taller).
+    match /comandas/{comandaId} {
+      allow read: if isSignedIn() && (
+        isMaster() ||
+        (
+          resource.data.targetWorkshop != 'EXTERNO' &&
+          (
+            role() == 'DISENO' ||
+            workshopArea() == 'AMBOS' ||
+            resource.data.targetWorkshop == workshopArea() ||
+            resource.data.targetWorkshop == 'AMBOS'
+          )
+        )
+      );
+      allow create: if isSignedIn() && (role() == 'DISENO' || isMaster());
+      allow update: if isSignedIn() && (isMaster() || role() == 'TALLER');
+      allow delete: if isMaster();
+    }
+
+    // Consecutivo del número de comanda (#CMD-XXXX)
+    match /contadores/{docId} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}

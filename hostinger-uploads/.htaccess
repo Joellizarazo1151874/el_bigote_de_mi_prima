@@ -1,0 +1,14 @@
+# Solo afecta a esta carpeta (hostinger-uploads/), no al resto del sitio.
+# Sube el límite de subida de PHP para permitir archivos de diseño grandes.
+<IfModule mod_php7.c>
+    php_value upload_max_filesize 100M
+    php_value post_max_size 105M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+</IfModule>
+<IfModule mod_php8.c>
+    php_value upload_max_filesize 100M
+    php_value post_max_size 105M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+</IfModule>

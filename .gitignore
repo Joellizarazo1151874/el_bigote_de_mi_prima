@@ -1,0 +1,17 @@
+# Caché local del CLI de Firebase (se regenera solo con "firebase deploy")
+.firebase/
+
+# Configuración local de Claude Code (no es parte del proyecto)
+.claude/
+
+# Documento ajeno a este proyecto que vive en esta misma carpeta por
+# comodidad (no tiene relación con El Bigote de Mi Prima)
+plan-becl.html
+
+# Dependencias (por si en el futuro se usa npm para algo)
+node_modules/
+
+# Archivos de sistema operativo / editor
+.DS_Store
+Thumbs.db
+*.log
