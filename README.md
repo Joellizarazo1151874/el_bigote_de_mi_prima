@@ -58,8 +58,7 @@ hostinger-uploads/
 
 ### 1. Firebase
 
-1. Crea un proyecto gratis en [console.firebase.google.com](https://console.firebase.google.com)
-   (plan Spark, no pide tarjeta).
+1. Crea un proyecto en [console.firebase.google.com](https://console.firebase.google.com).
 2. Activa **Authentication** → método Email/Contraseña.
 3. Crea **Firestore Database** (modo producción).
 4. Registra una "Web App" dentro del proyecto y copia el objeto `firebaseConfig`
