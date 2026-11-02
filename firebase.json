@@ -10,6 +10,9 @@
       "bigoteprueba.html",
       "plan-becl.html",
       "hostinger-uploads/**",
+      ".git/**",
+      ".claude/**",
+      ".firebase/**",
       "**/.*",
       "**/node_modules/**"
     ]
